@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2025 Erin Catto
 // SPDX-License-Identifier: MIT
 
+#include "geometric_mover.h"
 #include "gfx/debug_adapter.h"
 #include "gfx/draw.h"
 #include "human.h"
 #include "mesh_loader.h"
-#include "mover.h"
 #include "sample.h"
 #include "utils.h"
 
@@ -501,7 +501,9 @@ public:
 		}
 
 		m_launchSpeedScale = 2.0f;
-		m_mover.Initialize( this, position );
+		GeometricMoverDef moverDef;
+		moverDef.position = position;
+		m_mover.Create( m_worldId, &moverDef );
 
 		{
 			constexpr int capsuleCapacity = gridCount * gridCount / 8 + 1;
@@ -711,7 +713,33 @@ public:
 
 	void Step() override
 	{
-		m_mover.Step( nullptr, 0, true );
+		MoverInput input = GetMoverInput();
+		if ( input.jump )
+		{
+			m_mover.Jump();
+		}
+
+		float speedScale = 1.0f;
+		if ( input.walk )
+		{
+			speedScale = 0.25f;
+		}
+		else if ( m_mover.m_onGround && input.sprint )
+		{
+			speedScale = 1.5f;
+		}
+		float moverTimeStep = m_context->hertz > 0.0f ? 1.0f / m_context->hertz : 0.0f;
+		m_mover.Update( moverTimeStep, input.forward, input.right, input.throttle, speedScale );
+
+		if ( m_camera->m_thirdPerson )
+		{
+			m_camera->m_pivot = m_mover.m_position;
+			m_camera->UpdateTransform();
+		}
+
+		SetDrawOrigin( m_camera->DrawOrigin() );
+		m_mover.Draw();
+
 		DrawTextLine( "third person (T) = %d", m_camera->m_thirdPerson );
 
 		b3Vec3 translation = { 10.0f, -40.0f, -5.0f };
@@ -801,7 +829,7 @@ public:
 	}
 
 	b3CompoundData* m_compound;
-	CharacterMover m_mover;
+	GeometricMover m_mover;
 	float m_worldWidth;
 	b3Pos m_rayOrigin;
 };

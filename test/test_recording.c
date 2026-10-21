@@ -1569,6 +1569,43 @@ static int AllOps( void )
 	b3ParallelJoint_SetSpringDampingRatio( parallelId, 0.5f );
 	b3ParallelJoint_SetMaxTorque( parallelId, 20.0f );
 
+	// Dynamic mover: a rotation locked capsule driven by a mover joint and held up by a pogo joint
+	b3BodyDef moverBodyDef = b3DefaultBodyDef();
+	moverBodyDef.type = b3_dynamicBody;
+	moverBodyDef.position = (b3Pos){ -20.0f, 3.0f, 0.0f };
+	moverBodyDef.motionLocks =
+		(b3MotionLocks){ .angularX = true, .angularY = true, .angularZ = true };
+	b3BodyId moverBodyId = b3CreateBody( worldId, &moverBodyDef );
+	b3ShapeDef moverShapeDef = b3DefaultShapeDef();
+	moverShapeDef.density = 1.0f;
+	moverShapeDef.baseMaterial.friction = 0.0f;
+	b3Capsule moverCapsule = { { 0.0f, -0.5f, 0.0f }, { 0.0f, 0.5f, 0.0f }, 0.3f };
+	b3CreateCapsuleShape( moverBodyId, &moverShapeDef, &moverCapsule );
+
+	b3MoverJointDef moverDef = b3DefaultMoverJointDef();
+	moverDef.base.bodyIdA = groundId;
+	moverDef.base.bodyIdB = moverBodyId;
+	moverDef.base.collideConnected = true;
+	moverDef.linearVelocity = (b3Vec3){ 1.0f, 0.0f, 0.5f };
+	moverDef.maxVelocityForce = (b3Vec3){ 0.5f, 0.0f, 0.5f };
+	b3JointId moverJointId = b3CreateMoverJoint( worldId, &moverDef );
+
+	b3PogoJointDef pogoDef = b3DefaultPogoJointDef();
+	pogoDef.base.bodyIdA = groundId;
+	pogoDef.base.bodyIdB = moverBodyId;
+	pogoDef.base.localFrameA.p = (b3Vec3){ -20.0f, 1.0f, 0.0f };
+	pogoDef.base.localFrameB.p = moverCapsule.center1;
+	pogoDef.base.collideConnected = true;
+	pogoDef.restLength = 1.0f;
+	pogoDef.hertz = 5.0f;
+	pogoDef.dampingRatio = 0.8f;
+	pogoDef.maxCompressionForce = 1000.0f;
+	pogoDef.maxTensionForce = 1000.0f;
+	b3JointId pogoJointId = b3CreatePogoJoint( worldId, &pogoDef );
+	b3PogoJoint_SetRestLength( pogoJointId, 0.9f );
+	b3PogoJoint_SetSpringHertz( pogoJointId, 4.0f );
+	b3PogoJoint_SetSpringDampingRatio( pogoJointId, 0.7f );
+
 	// World config mutators
 	b3World_SetGravity( worldId, (b3Vec3){ 0.0f, -9.8f, 0.0f } );
 	b3World_EnableSleeping( worldId, true );
@@ -1632,8 +1669,21 @@ static int AllOps( void )
 			b3Body_ApplyLinearImpulseToCenter( capsuleBodyId, (b3Vec3){ 2.0f, 0.0f, 0.0f }, true );
 			b3Body_SetGravityScale( bodyId, 1.0f );
 			b3Body_SetSafetyFactor( fastId, 0.4f );
+			b3MoverJoint_SetMaxVelocityForce( moverJointId, (b3Vec3){ 60.0f, 0.0f, 60.0f } );
 		}
 
+		// The dynamic mover rebuilds its pogo every step, warm started from the old one
+		if ( i >= 6 )
+		{
+			pogoDef.impulse = b3PogoJoint_GetImpulse( pogoJointId );
+			pogoDef.velocity = b3PogoJoint_GetCurrentSpeed( pogoJointId );
+			pogoDef.base.localFrameA.p =
+				b3Body_GetLocalPoint( groundId, b3Body_GetPosition( moverBodyId ) );
+			pogoDef.base.localFrameA.p.y = 1.0f;
+			b3DestroyJoint( pogoJointId, false );
+			pogoJointId = b3CreatePogoJoint( worldId, &pogoDef );
+			b3MoverJoint_SetLinearVelocity( moverJointId, (b3Vec3){ -0.5f, 0.0f, 1.0f } );
+		}
 		// Issue queries mid-loop to exercise recording across steps
 		if ( i == 3 )
 		{

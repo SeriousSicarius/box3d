@@ -160,6 +160,17 @@ static void OnEvent( const sapp_event* e )
 		s_context.camera.OnEvent( e );
 	}
 
+	// Releases go to the key table even when the UI captures them. Otherwise Ctrl let go
+	// while the Ctrl+O picker is open stays down in the next sample.
+	if ( e->type == SAPP_EVENTTYPE_KEY_UP )
+	{
+		SetKeyDown( e->key_code, false );
+	}
+	else if ( e->type == SAPP_EVENTTYPE_UNFOCUSED )
+	{
+		ClearKeysDown();
+	}
+
 	if ( uiCaptured )
 	{
 		return;
@@ -265,10 +276,6 @@ static void OnEvent( const sapp_event* e )
 						break;
 				}
 			}
-			break;
-
-		case SAPP_EVENTTYPE_KEY_UP:
-			SetKeyDown( e->key_code, false );
 			break;
 
 		case SAPP_EVENTTYPE_CHAR:

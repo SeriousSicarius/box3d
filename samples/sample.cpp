@@ -97,6 +97,11 @@ void SetKeyDown( int key, bool down )
 	}
 }
 
+void ClearKeysDown()
+{
+	memset( s_keyDown, 0, sizeof( s_keyDown ) );
+}
+
 void SampleContext::Save()
 {
 	const b3DebugDraw* gd = GetGuiDraw();
@@ -2306,6 +2311,46 @@ void Sample::ToggleThirdPerson()
 		m_camera->m_thirdPerson = true;
 		ClearSelection();
 	}
+}
+
+MoverInput Sample::GetMoverInput() const
+{
+	MoverInput input = {};
+	input.forward = -m_camera->GetForward();
+	input.right = m_camera->GetRight();
+
+	input.forward.y = 0.0f;
+	input.forward = b3Normalize( input.forward );
+
+	if ( m_camera->m_thirdPerson == false )
+	{
+		return input;
+	}
+
+	if ( IsKeyDown( KEY_W ) )
+	{
+		input.throttle.x += 1.0f;
+	}
+
+	if ( IsKeyDown( KEY_S ) )
+	{
+		input.throttle.x -= 1.0f;
+	}
+
+	if ( IsKeyDown( KEY_A ) )
+	{
+		input.throttle.y -= 1.0f;
+	}
+
+	if ( IsKeyDown( KEY_D ) )
+	{
+		input.throttle.y += 1.0f;
+	}
+
+	input.jump = IsKeyDown( KEY_SPACE );
+	input.sprint = IsKeyDown( KEY_LEFT_SHIFT ) || IsKeyDown( KEY_RIGHT_SHIFT );
+	input.walk = IsKeyDown( KEY_LEFT_CONTROL ) || IsKeyDown( KEY_RIGHT_CONTROL );
+	return input;
 }
 
 float CastClosestCallback( b3ShapeId shapeId, b3Pos point, b3Vec3 normal, float fraction, uint64_t materialId, int triangleIndex,

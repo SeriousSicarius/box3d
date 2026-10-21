@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: 2025 Erin Catto
 // SPDX-License-Identifier: MIT
 
+#include "dynamic_mover.h"
+#include "geometric_mover.h"
 #include "gfx/draw.h"
 #include "gfx/keycodes.h"
 #include "mesh_loader.h"
-#include "mover.h"
 #include "sample.h"
 
 #include "box3d/box3d.h"
@@ -321,10 +322,10 @@ struct MoverImpact
 	bool valid;
 };
 
-class GeometricMover : public Sample
+class GeometricMoverSample : public Sample
 {
 public:
-	explicit GeometricMover( SampleContext* context )
+	explicit GeometricMoverSample( SampleContext* context )
 		: Sample( context )
 	{
 		b3Pos moverPosition = { 7.5f, 0.75f, 9.0f };
@@ -334,7 +335,11 @@ public:
 			m_camera->SetView( 120.0f, 30.0f, 5.0f, moverPosition );
 		}
 
-		m_mover.Initialize( this, moverPosition );
+		GeometricMoverDef moverDef;
+		moverDef.position = moverPosition;
+		m_mover.Create( m_worldId, &moverDef );
+		m_mover.m_ignoreShapeIds = &m_ignoreShapeId;
+		m_mover.m_ignoreCount = 1;
 
 		{
 			m_levelMesh = CreateMeshData( "data/meshes/test_map01.obj", 1.0f, false, false, true, true );
@@ -557,7 +562,6 @@ public:
 		//}
 
 		m_camera->m_thirdPerson = false;
-		m_clipVelocity = true;
 		// sapp_lock_mouse( true );
 
 		// m_haveMouseLast = false;
@@ -565,7 +569,7 @@ public:
 		// m_mouseDelta = { 0.0f, 0.0f };
 	}
 
-	~GeometricMover() override
+	~GeometricMoverSample() override
 	{
 		m_camera->m_thirdPerson = false;
 		sapp_lock_mouse( false );
@@ -589,7 +593,7 @@ public:
 			ToggleThirdPerson();
 		}
 
-		ImGui::Checkbox( "Clip Velocity", &m_clipVelocity );
+		ImGui::Checkbox( "Clip Velocity", &m_mover.m_clipVelocity );
 
 		return true;
 	}
@@ -691,7 +695,7 @@ public:
 	void UpdateFallingTree( b3Pos moverStart, b3WorldTransform treeStart )
 	{
 		b3WorldTransform treeEnd = b3Body_GetTransform( m_treeId );
-		b3Vec3 moverTranslation = b3SubPos( m_mover.m_transform.p, moverStart );
+		b3Vec3 moverTranslation = b3SubPos( m_mover.m_position, moverStart );
 
 		b3BodyTOIResult toi = b3Body_TimeOfImpactMover( m_treeId, moverStart, &m_mover.m_capsule, moverTranslation,
 													   b3DefaultQueryFilter(), treeStart, treeEnd );
@@ -712,7 +716,7 @@ public:
 	void UpdateFallingBox( b3Pos moverStart, b3WorldTransform boxStart )
 	{
 		b3WorldTransform boxEnd = b3Body_GetTransform( m_fallingBoxId );
-		b3Vec3 moverTranslation = b3SubPos( m_mover.m_transform.p, moverStart );
+		b3Vec3 moverTranslation = b3SubPos( m_mover.m_position, moverStart );
 
 		b3BodyTOIResult toi = b3Body_TimeOfImpactMover( m_fallingBoxId, moverStart, &m_mover.m_capsule, moverTranslation,
 													   b3DefaultQueryFilter(), boxStart, boxEnd );
@@ -742,11 +746,37 @@ public:
 
 	void Step() override
 	{
-		b3Pos moverStart = m_mover.m_transform.p;
+		b3Pos moverStart = m_mover.m_position;
 		b3WorldTransform boxStart = b3Body_GetTransform( m_fallingBoxId );
 		b3WorldTransform treeStart = b3Body_GetTransform( m_treeId );
 
-		m_mover.Step( &m_ignoreShapeId, 1, m_clipVelocity );
+		MoverInput input = GetMoverInput();
+		if ( input.jump )
+		{
+			m_mover.Jump();
+		}
+
+		float speedScale = 1.0f;
+		if ( input.walk )
+		{
+			speedScale = 0.25f;
+		}
+		else if ( m_mover.m_onGround && input.sprint )
+		{
+			speedScale = 1.5f;
+		}
+		float timeStep = m_context->hertz > 0.0f ? 1.0f / m_context->hertz : 0.0f;
+		m_mover.Update( timeStep, input.forward, input.right, input.throttle, speedScale );
+
+		if ( m_camera->m_thirdPerson )
+		{
+			m_camera->m_pivot = m_mover.m_position;
+			m_camera->UpdateTransform();
+		}
+
+		SetDrawOrigin( m_camera->DrawOrigin() );
+		m_mover.Draw();
+
 		DrawTextLine( "third person (T) = %d", m_camera->m_thirdPerson );
 		DrawTextLine( "deltaX = %g, deltaY = %g", m_mouseDelta.x, m_mouseDelta.y );
 
@@ -769,10 +799,10 @@ public:
 
 	static Sample* Create( SampleContext* context )
 	{
-		return new GeometricMover( context );
+		return new GeometricMoverSample( context );
 	}
 
-	CharacterMover m_mover;
+	GeometricMover m_mover;
 	MoverShapeUserData m_enemyShape;
 	MoverShapeUserData m_friendlyShape;
 	MoverShapeUserData m_treeShapeUserData;
@@ -793,10 +823,751 @@ public:
 	b3Vec3 m_fallingExtent;
 	b3Vec3 m_fallingSpin;
 	float m_respawnTimer;
-	bool m_clipVelocity;
 };
 
-static int sampleMover = RegisterSample( "Character", "Geometric Mover", GeometricMover::Create );
+static int sampleMover =
+	RegisterSample( "Character", "Geometric Mover", GeometricMoverSample::Create );
+
+// A playground for the dynamic mover. Collect every gem to finish a lap. The course has stairs, a
+// rope bridge, an elevator and a shuttle to a high route, a seesaw, crates to shove, a sweeper arm
+// to jump over, and a row of thin pillars that only the skirt probes can stand on.
+class DynamicMoverSample : public Sample
+{
+public:
+	explicit DynamicMoverSample( SampleContext* context )
+		: Sample( context )
+	{
+		b3Pos startPosition = { 0.0f, 1.5f, 0.0f };
+
+		if ( m_context->restart == false )
+		{
+			m_camera->SetView( 180.0f, 20.0f, 6.0f, startPosition );
+		}
+
+		b3BodyId groundId = AddGroundBox( 80.0f );
+
+		{
+			DynamicMoverDef def;
+			def.position = startPosition;
+			def.filter = { MoverBit, AllBits, 0 };
+			def.platformMaterialId = m_platformMaterial;
+			def.enableSensorEvents = true;
+			m_mover.Create( m_worldId, &def );
+		}
+
+		b3ShapeDef shapeDef = b3DefaultShapeDef();
+
+		// Stairs up to the bridge
+		{
+			b3BodyDef bodyDef = b3DefaultBodyDef();
+			b3BodyId stairsId = b3CreateBody( m_worldId, &bodyDef );
+			shapeDef.baseMaterial.customColor = b3_colorCornflowerBlue;
+
+			for ( int i = 0; i < 10; ++i )
+			{
+				float halfHeight = 0.1f * ( i + 1 );
+				b3Transform transform = { { -6.0f, halfHeight, 3.3f + 0.6f * i }, b3Quat_identity };
+				b3BoxHull box = b3MakeTransformedBoxHull( 1.5f, halfHeight, 0.3f, transform );
+				b3CreateHullShape( stairsId, &shapeDef, &box.base );
+			}
+		}
+
+		// Towers at each end of the bridge
+		b3BodyId towerIds[2];
+		for ( int i = 0; i < 2; ++i )
+		{
+			b3BodyDef bodyDef = b3DefaultBodyDef();
+			bodyDef.position = { i == 0 ? -6.0f : 6.0f, 1.0f, 11.0f };
+			towerIds[i] = b3CreateBody( m_worldId, &bodyDef );
+
+			shapeDef.baseMaterial.customColor = b3_colorSlateGray;
+			b3BoxHull box = b3MakeBoxHull( 1.5f, 1.0f, 2.0f );
+			b3CreateHullShape( towerIds[i], &shapeDef, &box.base );
+		}
+
+		// The pogo presses down on the planks, so the bridge sags and sways underfoot
+		{
+			int plankCount = 18;
+			float plankLength = 9.0f / plankCount;
+			float xBase = -4.5f;
+			float y = 1.95f;
+			float z = 11.0f;
+
+			b3ShapeDef plankShapeDef = b3DefaultShapeDef();
+			plankShapeDef.density = 300.0f;
+			plankShapeDef.baseMaterial.customColor = b3_colorBurlywood;
+			b3BoxHull plank = b3MakeBoxHull( 0.5f * plankLength - 0.01f, 0.05f, 0.75f );
+
+			// The hinge is the local z-axis, across the bridge
+			b3RevoluteJointDef jointDef = b3DefaultRevoluteJointDef();
+			jointDef.enableMotor = true;
+			jointDef.maxMotorTorque = 50.0f;
+
+			b3BodyId prevId = towerIds[0];
+			for ( int i = 0; i < plankCount; ++i )
+			{
+				b3BodyDef bodyDef = b3DefaultBodyDef();
+				bodyDef.type = b3_dynamicBody;
+				bodyDef.position = { xBase + plankLength * ( i + 0.5f ), y, z };
+				bodyDef.angularDamping = 0.5f;
+				b3BodyId plankId = b3CreateBody( m_worldId, &bodyDef );
+				b3CreateHullShape( plankId, &plankShapeDef, &plank.base );
+
+				b3Pos pivot = { xBase + plankLength * i, y, z };
+				jointDef.base.bodyIdA = prevId;
+				jointDef.base.bodyIdB = plankId;
+				jointDef.base.localFrameA.p = b3Body_GetLocalPoint( prevId, pivot );
+				jointDef.base.localFrameB.p = b3Body_GetLocalPoint( plankId, pivot );
+				b3CreateRevoluteJoint( m_worldId, &jointDef );
+
+				prevId = plankId;
+			}
+
+			b3Pos pivot = { xBase + plankLength * plankCount, y, z };
+			jointDef.base.bodyIdA = prevId;
+			jointDef.base.bodyIdB = towerIds[1];
+			jointDef.base.localFrameA.p = b3Body_GetLocalPoint( prevId, pivot );
+			jointDef.base.localFrameB.p = b3Body_GetLocalPoint( towerIds[1], pivot );
+			b3CreateRevoluteJoint( m_worldId, &jointDef );
+		}
+
+		// Ramps from the east tower down to the ground, one walkable and one too steep
+		AddRamp( { 6.0f, 2.0f, 9.0f }, { 6.0f, 0.0f, 3.5f }, 1.5f, b3_colorOliveDrab );
+		AddRamp( { 12.0f, 3.0f, -12.0f }, { 12.0f, 0.0f, -9.5f }, 3.5f, b3_colorIndianRed );
+
+		// High route: an elevator up to a ledge, then a shuttle across to a second ledge
+		for ( int i = 0; i < 2; ++i )
+		{
+			b3BodyDef bodyDef = b3DefaultBodyDef();
+			bodyDef.position = { i == 0 ? 18.0f : 32.0f, 2.0f, 0.0f };
+			b3BodyId ledgeId = b3CreateBody( m_worldId, &bodyDef );
+
+			shapeDef.baseMaterial.customColor = b3_colorDarkSlateGray;
+			b3BoxHull box = b3MakeBoxHull( 2.0f, 2.0f, 2.0f );
+			b3CreateHullShape( ledgeId, &shapeDef, &box.base );
+		}
+
+		for ( int i = 0; i < m_platformCount; ++i )
+		{
+			b3BodyDef bodyDef = b3DefaultBodyDef();
+			bodyDef.type = b3_kinematicBody;
+			bodyDef.position = GetPlatformPosition( i, 0.0f );
+			m_platformIds[i] = b3CreateBody( m_worldId, &bodyDef );
+
+			b3ShapeDef platformShapeDef = b3DefaultShapeDef();
+			platformShapeDef.baseMaterial.userMaterialId = m_platformMaterial;
+			platformShapeDef.baseMaterial.customColor = b3_colorGoldenRod;
+			b3BoxHull box = b3MakeBoxHull( 1.5f, 0.1f, 1.5f );
+			b3CreateHullShape( m_platformIds[i], &platformShapeDef, &box.base );
+		}
+
+		// Seesaw
+		{
+			b3BodyDef bodyDef = b3DefaultBodyDef();
+			bodyDef.position = { -14.0f, 0.4f, 0.0f };
+			b3BodyId fulcrumId = b3CreateBody( m_worldId, &bodyDef );
+
+			shapeDef.baseMaterial.customColor = b3_colorSlateGray;
+			b3BoxHull fulcrum = b3MakeBoxHull( 0.25f, 0.4f, 0.75f );
+			b3CreateHullShape( fulcrumId, &shapeDef, &fulcrum.base );
+
+			bodyDef.type = b3_dynamicBody;
+			bodyDef.position = { -14.0f, 0.9f, 0.0f };
+			b3BodyId plankId = b3CreateBody( m_worldId, &bodyDef );
+
+			b3ShapeDef plankShapeDef = b3DefaultShapeDef();
+			plankShapeDef.density = 200.0f;
+			plankShapeDef.baseMaterial.customColor = b3_colorBurlywood;
+			b3BoxHull plank = b3MakeBoxHull( 3.5f, 0.1f, 0.8f );
+			b3CreateHullShape( plankId, &plankShapeDef, &plank.base );
+
+			b3Pos pivot = { -14.0f, 0.8f, 0.0f };
+			b3RevoluteJointDef jointDef = b3DefaultRevoluteJointDef();
+			jointDef.base.bodyIdA = fulcrumId;
+			jointDef.base.bodyIdB = plankId;
+			jointDef.base.localFrameA.p = b3Body_GetLocalPoint( fulcrumId, pivot );
+			jointDef.base.localFrameB.p = b3Body_GetLocalPoint( plankId, pivot );
+			jointDef.enableLimit = true;
+			jointDef.lowerAngle = -0.3f;
+			jointDef.upperAngle = 0.3f;
+			b3CreateRevoluteJoint( m_worldId, &jointDef );
+		}
+
+		// Large pyramid past the seesaw, standing in the yz plane
+		{
+			int baseCount = m_isDebug ? 20 : 100;
+
+			b3BodyDef bodyDef = b3DefaultBodyDef();
+			bodyDef.type = b3_dynamicBody;
+
+			b3ShapeDef boxShapeDef = b3DefaultShapeDef();
+			boxShapeDef.density = 50.0f;
+
+			float h = 0.25f;
+			b3BoxHull box = b3MakeCubeHull( h );
+
+			for ( int i = 0; i < baseCount; ++i )
+			{
+				float y = ( 2.0f * i + 1.0f ) * h;
+
+				for ( int j = i; j < baseCount; ++j )
+				{
+					float z = ( i + 1.0f ) * h + 2.0f * ( j - i ) * h - h * baseCount;
+
+					bodyDef.position = { -50.0f, y, z };
+					b3BodyId bodyId = b3CreateBody( m_worldId, &bodyDef );
+					b3CreateHullShape( bodyId, &boxShapeDef, &box.base );
+				}
+			}
+		}
+
+		// Crates to shove around
+		{
+			b3ShapeDef crateShapeDef = b3DefaultShapeDef();
+			crateShapeDef.density = 100.0f;
+			crateShapeDef.baseMaterial.friction = 0.6f;
+			crateShapeDef.baseMaterial.customColor = b3_colorPeru;
+			b3BoxHull crate = b3MakeCubeHull( 0.4f );
+
+			for ( int row = 0; row < 4; ++row )
+			{
+				for ( int i = 0; i < 4 - row; ++i )
+				{
+					b3BodyDef bodyDef = b3DefaultBodyDef();
+					bodyDef.type = b3_dynamicBody;
+					bodyDef.position = { -10.0f + 0.82f * ( i - 0.5f * ( 3 - row ) ),
+										 0.4f + 0.8f * row, -8.0f };
+					b3BodyId crateId = b3CreateBody( m_worldId, &bodyDef );
+					b3CreateHullShape( crateId, &crateShapeDef, &crate.base );
+				}
+			}
+		}
+
+		// Chest high spheres on soft welds the mover can push aside
+		{
+			b3ShapeDef sphereShapeDef = b3DefaultShapeDef();
+			sphereShapeDef.density = 100.0f;
+			sphereShapeDef.baseMaterial.customColor = b3_colorLightSeaGreen;
+			sphereShapeDef.filter = { SphereBit, AllBits, 0 };
+			b3Sphere sphere = { b3Vec3_zero, 0.35f };
+
+			b3WeldJointDef jointDef = b3DefaultWeldJointDef();
+			jointDef.linearHertz = 0.5f;
+			jointDef.linearDampingRatio = 0.2f;
+			jointDef.base.bodyIdA = groundId;
+			jointDef.base.collideConnected = true;
+
+			int gridCount = 20;
+			for ( int i = 0; i < gridCount; ++i )
+			{
+				for ( int j = 0; j < gridCount; ++j )
+				{
+					b3Pos position = { -9.5f + 1.0f * i, 1.7f, 17.0f + 1.0f * j };
+
+					b3BodyDef bodyDef = b3DefaultBodyDef();
+					bodyDef.type = b3_dynamicBody;
+					bodyDef.position = position;
+					bodyDef.gravityScale = 0.0f;
+					b3BodyId sphereId = b3CreateBody( m_worldId, &bodyDef );
+					b3CreateSphereShape( sphereId, &sphereShapeDef, &sphere );
+
+					jointDef.base.bodyIdB = sphereId;
+					jointDef.base.localFrameA.p = b3Body_GetLocalPoint( groundId, position );
+					jointDef.base.localFrameB.p = b3Vec3_zero;
+					b3CreateWeldJoint( m_worldId, &jointDef );
+				}
+			}
+		}
+
+		// Pressure plate under the middle of the sphere grid
+		{
+			b3BodyDef bodyDef = b3DefaultBodyDef();
+			bodyDef.type = b3_dynamicBody;
+			bodyDef.position = m_plateCenter;
+			b3BodyId plateId = b3CreateBody( m_worldId, &bodyDef );
+
+			b3ShapeDef plateShapeDef = b3DefaultShapeDef();
+			plateShapeDef.density = 20.0f;
+			plateShapeDef.baseMaterial.customColor = b3_colorFireBrick;
+			plateShapeDef.filter = { PlateBit, MoverBit, 0 };
+
+			// The blast would only slam the plate into its lower limit
+			plateShapeDef.explosionScale = 0.0f;
+
+			b3BoxHull plate = b3MakeBoxHull( 1.5f, 0.1f, 1.5f );
+			b3CreateHullShape( plateId, &plateShapeDef, &plate.base );
+
+			// The motor force works like a preloaded spring. The plate holds its own weight but
+			// sinks under the mover.
+			float gravity = b3Length( b3World_GetGravity( m_worldId ) );
+			float plateWeight = gravity * b3Body_GetMass( plateId );
+			float moverWeight = m_mover.m_gravityScale * gravity * b3Body_GetMass( m_mover.m_moverId );
+
+			// The prismatic axis is the local x-axis, so turn it upright
+			b3Quat upright = b3MakeQuatFromAxisAngle( b3Vec3_axisZ, 0.5f * B3_PI );
+
+			b3PrismaticJointDef jointDef = b3DefaultPrismaticJointDef();
+			jointDef.base.bodyIdA = groundId;
+			jointDef.base.bodyIdB = plateId;
+			jointDef.base.localFrameA = { b3Body_GetLocalPoint( groundId, m_plateCenter ), upright };
+			jointDef.base.localFrameB = { b3Vec3_zero, upright };
+			jointDef.enableLimit = true;
+			jointDef.lowerTranslation = -m_plateTravel;
+			jointDef.upperTranslation = 0.0f;
+			jointDef.enableMotor = true;
+			jointDef.motorSpeed = 0.5f;
+			jointDef.maxMotorForce = plateWeight + 0.5f * moverWeight;
+			m_plateJointId = b3CreatePrismaticJoint( m_worldId, &jointDef );
+			m_plateArmed = true;
+		}
+
+		// Sleeping boxes overhead that the blast wakes, kept inside its reach
+		if ( m_isDebug == false )
+		{
+			b3ShapeDef boxShapeDef = b3DefaultShapeDef();
+			boxShapeDef.density = 100.0f;
+			boxShapeDef.baseMaterial.customColor = b3_colorPeru;
+
+			// The blast should wake these rather than launch them
+			boxShapeDef.explosionScale = 0.05f;
+
+			b3BoxHull box = b3MakeCubeHull( 0.1f );
+
+			int gridCount = 32;
+			int layerCount = 3;
+			float spacing = 0.5f;
+			float offset = -0.5f * spacing * ( gridCount - 1 );
+
+			b3BodyDef bodyDef = b3DefaultBodyDef();
+			bodyDef.type = b3_dynamicBody;
+			bodyDef.isAwake = false;
+
+			for ( int layer = 0; layer < layerCount; ++layer )
+			{
+				for ( int i = 0; i < gridCount; ++i )
+				{
+					for ( int j = 0; j < gridCount; ++j )
+					{
+						bodyDef.position = { m_plateCenter.x + offset + spacing * i, 8.0f + spacing * layer,
+											 m_plateCenter.z + offset + spacing * j };
+						b3BodyId boxId = b3CreateBody( m_worldId, &bodyDef );
+						b3CreateHullShape( boxId, &boxShapeDef, &box.base );
+					}
+				}
+			}
+		}
+
+		// A big ball to roll
+		{
+			b3BodyDef bodyDef = b3DefaultBodyDef();
+			bodyDef.type = b3_dynamicBody;
+			bodyDef.position = { 6.0f, 1.0f, -6.0f };
+			b3BodyId ballId = b3CreateBody( m_worldId, &bodyDef );
+
+			b3ShapeDef ballShapeDef = b3DefaultShapeDef();
+			ballShapeDef.density = 30.0f;
+			ballShapeDef.baseMaterial.rollingResistance = 0.05f;
+			ballShapeDef.baseMaterial.customColor = b3_colorTomato;
+			b3Sphere sphere = { b3Vec3_zero, 1.0f };
+			b3CreateSphereShape( ballId, &ballShapeDef, &sphere );
+		}
+
+		// The sweeper arms are at waist height, so time a jump to get past
+		{
+			b3BodyDef bodyDef = b3DefaultBodyDef();
+			bodyDef.type = b3_dynamicBody;
+			bodyDef.position = m_sweeperCenter;
+			//bodyDef.angularVelocity = { 0.0f, 1.2f, 0.0f };
+			b3BodyId sweeperId = b3CreateBody( m_worldId, &bodyDef );
+
+			shapeDef.baseMaterial.customColor = b3_colorCrimson;
+			b3BoxHull post = b3MakeTransformedBoxHull( 0.3f, 0.6f, 0.3f,
+													   { { 0.0f, 0.6f, 0.0f }, b3Quat_identity } );
+			b3CreateHullShape( sweeperId, &shapeDef, &post.base );
+
+			b3BoxHull armX = b3MakeTransformedBoxHull( 5.0f, 0.15f, 0.15f,
+													   { { 0.0f, 1.0f, 0.0f }, b3Quat_identity } );
+			b3CreateHullShape( sweeperId, &shapeDef, &armX.base );
+
+			b3BoxHull armZ = b3MakeTransformedBoxHull( 0.15f, 0.15f, 5.0f,
+													   { { 0.0f, 1.0f, 0.0f }, b3Quat_identity } );
+			b3CreateHullShape( sweeperId, &shapeDef, &armZ.base );
+
+			b3Quat upright = b3MakeQuatFromAxisAngle( b3Vec3_axisX, -0.5f * B3_PI );
+
+			b3RevoluteJointDef jointDef = b3DefaultRevoluteJointDef();
+			jointDef.base.bodyIdA = groundId;
+			jointDef.base.bodyIdB = sweeperId;
+			jointDef.base.localFrameA = { b3Body_GetLocalPoint( groundId, m_sweeperCenter ),
+										  upright };
+			jointDef.base.localFrameB = { b3Vec3_zero, upright };
+			jointDef.enableMotor = true;
+			jointDef.motorSpeed = 1.0f;
+			jointDef.maxMotorTorque = 10000.0f;
+
+			b3CreateRevoluteJoint( m_worldId, &jointDef );
+		}
+
+		shapeDef.baseMaterial.customColor = b3_colorMediumPurple;
+		for ( int i = 0; i < m_pillarCount; ++i )
+		{
+			b3Pos top = GetPillarTop( i );
+
+			b3BodyDef bodyDef = b3DefaultBodyDef();
+			bodyDef.position = { top.x, 0.0f, top.z };
+			b3BodyId pillarId = b3CreateBody( m_worldId, &bodyDef );
+
+			b3HullData* pillar = b3CreateCylinder( (float)top.y, 0.75f, 0.0f, 12 );
+			b3CreateHullShape( pillarId, &shapeDef, pillar );
+			b3DestroyHull( pillar );
+		}
+
+		SpawnGems();
+
+		m_camera->m_thirdPerson = true;
+		sapp_lock_mouse( true );
+
+		m_jumpReleased = true;
+		m_drawProbes = true;
+		m_time = 0.0f;
+		m_lapTime = 0.0f;
+		m_bestLapTime = 0.0f;
+		m_lapCount = 0;
+	}
+
+	~DynamicMoverSample() override
+	{
+		m_camera->m_thirdPerson = false;
+		sapp_lock_mouse( false );
+	}
+
+	// A thin static slab whose top face runs from the high point to the low point
+	void AddRamp( b3Vec3 high, b3Vec3 low, float halfWidth, b3HexColor color )
+	{
+		b3Vec3 axis = b3Sub( high, low );
+		float length = b3Length( axis );
+		axis = b3MulSV( 1.0f / length, axis );
+
+		b3Quat rotation = b3ComputeQuatBetweenUnitVectors( b3Vec3_axisZ, axis );
+		b3Vec3 normal = b3RotateVector( rotation, b3Vec3_axisY );
+
+		float halfThickness = 0.1f;
+		b3Vec3 center = b3MulAdd( b3Lerp( low, high, 0.5f ), -halfThickness, normal );
+
+		b3BodyDef bodyDef = b3DefaultBodyDef();
+		b3BodyId rampId = b3CreateBody( m_worldId, &bodyDef );
+
+		b3ShapeDef shapeDef = b3DefaultShapeDef();
+		shapeDef.baseMaterial.customColor = color;
+		b3BoxHull box = b3MakeTransformedBoxHull( halfWidth, halfThickness, 0.5f * length,
+												  { center, rotation } );
+		b3CreateHullShape( rampId, &shapeDef, &box.base );
+	}
+
+	b3Pos GetPlatformPosition( int index, float time ) const
+	{
+		if ( index == 0 )
+		{
+			// Elevator, the top face rises from the ground to the first ledge
+			float y = 1.95f - 1.95f * cosf( 0.6f * time );
+			return { 14.0f, y, 0.0f };
+		}
+
+		// Shuttle between the two ledges
+		float x = 25.0f - 3.5f * cosf( 0.5f * time );
+		return { x, 3.9f, 0.0f };
+	}
+
+	b3Pos GetPillarTop( int index ) const
+	{
+		return { -20.0f, 0.5f + 0.6f * index, -3.0f - 5.0f * index };
+	}
+
+	void SpawnGems()
+	{
+		b3Pos positions[m_gemCount] = {
+			{ 0.0f, 1.2f, 5.0f },	{ -6.0f, 2.2f, 6.0f },	 { -6.0f, 3.2f, 11.0f },
+			{ 0.0f, 3.2f, 11.0f },	{ 6.0f, 3.2f, 11.0f },	 { 6.0f, 2.2f, 6.0f },
+			{ 18.0f, 5.2f, 0.0f },	{ 25.0f, 5.2f, 0.0f },	 { 32.0f, 5.2f, 0.0f },
+			{ -17.0f, 2.2f, 0.0f }, { -10.0f, 4.4f, -8.0f }, { 6.0f, 1.2f, -9.5f },
+			{ 3.0f, 1.2f, -16.0f }, { -3.0f, 1.2f, -16.0f }, { 0.0f, 1.2f, -19.0f },
+			{ 0.0f, 1.2f, -13.0f }, { -20.0f, 0.0f, 0.0f },
+		};
+
+		// The last gem waits on the tallest pillar
+		positions[m_gemCount - 1] = GetPillarTop( m_pillarCount - 1 );
+		positions[m_gemCount - 1].y += 1.2f;
+
+		b3ShapeDef shapeDef = b3DefaultShapeDef();
+		shapeDef.isSensor = true;
+		shapeDef.enableSensorEvents = true;
+		shapeDef.filter = { GemBit, MoverBit, 0 };
+		shapeDef.baseMaterial.customColor = b3_colorGold;
+
+		// Stand a cube on a corner so it reads as a gem
+		b3Quat tilt = b3MakeQuatFromAxisAngle( b3Normalize( { 1.0f, 0.0f, -1.0f } ), 0.9553f );
+		b3BoxHull gem = b3MakeTransformedBoxHull( 0.2f, 0.2f, 0.2f, { b3Vec3_zero, tilt } );
+
+		for ( int i = 0; i < m_gemCount; ++i )
+		{
+			b3BodyDef bodyDef = b3DefaultBodyDef();
+			bodyDef.type = b3_kinematicBody;
+			bodyDef.position = positions[i];
+			bodyDef.angularVelocity = { 0.0f, 2.0f, 0.0f };
+			m_gemIds[i] = b3CreateBody( m_worldId, &bodyDef );
+			b3CreateHullShape( m_gemIds[i], &shapeDef, &gem.base );
+		}
+
+		m_gemsLeft = m_gemCount;
+	}
+
+	void UpdatePressurePlate()
+	{
+		float translation = b3PrismaticJoint_GetTranslation( m_plateJointId );
+
+		// Fire once per press. The plate has to spring back up to rearm.
+		if ( m_plateArmed && translation < -m_plateTravel + 0.01f )
+		{
+			b3ExplosionDef def = b3DefaultExplosionDef();
+			def.position = b3OffsetPos( m_plateCenter, b3Vec3{ 0.0f, 0.1f, 0.0f } );
+			def.radius = 1.0f;
+			def.falloff = 14.0f;
+			def.impulsePerArea = 3000.0f;
+			b3World_Explode( m_worldId, &def );
+
+			m_mover.Launch();
+			m_plateArmed = false;
+		}
+		else if ( m_plateArmed == false && translation > -0.01f )
+		{
+			m_plateArmed = true;
+		}
+	}
+
+	void CollectGems()
+	{
+		b3SensorEvents events = b3World_GetSensorEvents( m_worldId );
+		for ( int i = 0; i < events.beginCount; ++i )
+		{
+			b3SensorBeginTouchEvent* event = events.beginEvents + i;
+			if ( b3Shape_IsValid( event->visitorShapeId ) == false ||
+				 b3Shape_IsValid( event->sensorShapeId ) == false )
+			{
+				continue;
+			}
+
+			b3BodyId visitorId = b3Shape_GetBody( event->visitorShapeId );
+			if ( B3_ID_EQUALS( visitorId, m_mover.m_moverId ) == false )
+			{
+				continue;
+			}
+
+			b3BodyId gemId = b3Shape_GetBody( event->sensorShapeId );
+			for ( b3BodyId& id : m_gemIds )
+			{
+				if ( B3_ID_EQUALS( id, gemId ) )
+				{
+					b3DestroyBody( id );
+					id = b3_nullBodyId;
+					m_gemsLeft -= 1;
+					break;
+				}
+			}
+		}
+
+		if ( m_gemsLeft == 0 )
+		{
+			m_lapCount += 1;
+			if ( m_bestLapTime == 0.0f || m_lapTime < m_bestLapTime )
+			{
+				m_bestLapTime = m_lapTime;
+			}
+
+			m_lapTime = 0.0f;
+			SpawnGems();
+		}
+	}
+
+	// Pull the boom in when the view to the mover is blocked
+	void FollowMover( b3Pos position )
+	{
+		if ( m_camera->m_thirdPerson == false )
+		{
+			return;
+		}
+
+		m_camera->m_pivot = position;
+		m_camera->UpdateTransform();
+
+		b3Vec3 translation = b3SubPos( m_camera->m_worldEye, position );
+		float distance = b3Length( translation );
+		if ( distance < 0.01f )
+		{
+			return;
+		}
+
+		b3QueryFilter filter = { StaticBit, StaticBit, 0, "camera" };
+		b3RayResult result = b3World_CastRayClosest( m_worldId, position, translation, filter );
+		if ( result.hit )
+		{
+			float savedRadius = m_camera->m_radius;
+			m_camera->m_radius = b3MaxFloat( 0.1f, result.fraction * distance - 0.15f );
+			m_camera->UpdateTransform();
+			m_camera->m_radius = savedRadius;
+		}
+	}
+
+	void Keyboard( int key, int action, int mods ) override
+	{
+		if ( key == KEY_T && action == ACTION_PRESS )
+		{
+			ToggleThirdPerson();
+		}
+	}
+
+	bool DrawControls() override
+	{
+		bool thirdPerson = m_camera->m_thirdPerson;
+		if ( ImGui::Checkbox( "Third Person (T)", &thirdPerson ) )
+		{
+			ToggleThirdPerson();
+		}
+
+		ImGui::Checkbox( "Skirt Pogo", &m_mover.m_enableSkirtPogo );
+		ImGui::Checkbox( "Draw Probes", &m_drawProbes );
+
+		ImGui::Separator();
+
+		ImGui::SliderFloat( "Jump Speed", &m_mover.m_jumpSpeed, 0.0f, 20.0f, "%.1f" );
+		ImGui::SliderFloat( "Max Speed", &m_mover.m_maxSpeed, 0.0f, 20.0f, "%.0f" );
+		ImGui::SliderFloat( "Accelerate", &m_mover.m_accelerate, 0.0f, 100.0f, "%.0f" );
+		ImGui::SliderFloat( "Friction", &m_mover.m_friction, 0.0f, 20.0f, "%.1f" );
+		ImGui::SliderFloat( "Air Steer", &m_mover.m_airSteer, 0.0f, 1.0f, "%.2f" );
+
+		float gravityScale = m_mover.m_gravityScale;
+		if ( ImGui::SliderFloat( "Gravity Scale", &gravityScale, 0.0f, 4.0f, "%.1f" ) )
+		{
+			m_mover.SetGravityScale( gravityScale );
+		}
+
+		ImGui::SliderFloat( "Pogo Hertz", &m_mover.m_pogoHertz, 0.0f, 30.0f, "%.0f" );
+		ImGui::SliderFloat( "Pogo Damping", &m_mover.m_pogoDampingRatio, 0.0f, 4.0f, "%.1f" );
+		ImGui::SliderFloat( "Ground Force", &m_mover.m_maxGroundForce, 0.0f, 20000.0f, "%.0f" );
+
+		return true;
+	}
+
+	void Step() override
+	{
+		bool pause = m_context->pause && m_context->singleStep == 0;
+		float timeStep = m_context->hertz > 0.0f ? 1.0f / m_context->hertz : 0.0f;
+
+		if ( pause == false && timeStep > 0.0f )
+		{
+			m_time += timeStep;
+			m_lapTime += timeStep;
+
+			for ( int i = 0; i < m_platformCount; ++i )
+			{
+				b3WorldTransform target = { GetPlatformPosition( i, m_time ), b3Quat_identity };
+				b3Body_SetTargetTransform( m_platformIds[i], target, timeStep, true );
+			}
+
+			MoverInput input = GetMoverInput();
+
+			// Jumping again needs a fresh press
+			if ( input.jump )
+			{
+				if ( m_jumpReleased && m_mover.Jump() )
+				{
+					m_jumpReleased = false;
+				}
+			}
+			else
+			{
+				m_jumpReleased = true;
+			}
+
+			float speedScale = 1.0f;
+			if ( input.walk )
+			{
+				speedScale = 0.25f;
+			}
+			else if ( input.sprint )
+			{
+				speedScale = 1.5f;
+			}
+			m_mover.Update( timeStep, input.forward, input.right, input.throttle, speedScale );
+		}
+
+		Sample::Step();
+
+		if ( m_didStep )
+		{
+			CollectGems();
+			UpdatePressurePlate();
+		}
+
+		b3Pos position = b3Body_GetPosition( m_mover.m_moverId );
+		FollowMover( position );
+		SetDrawOrigin( m_camera->DrawOrigin() );
+
+		if ( m_drawProbes )
+		{
+			m_mover.Draw();
+		}
+
+		DrawTextLine( "WASD = move, Space = jump, Shift = sprint, Ctrl = walk, T = camera" );
+		DrawTextLine( "gems %d / %d, lap time %.1f s", m_gemCount - m_gemsLeft, m_gemCount,
+					  m_lapTime );
+
+		if ( m_lapCount > 0 )
+		{
+			DrawTextLine( "laps %d, best %.1f s", m_lapCount, m_bestLapTime );
+		}
+
+		float normalY = m_mover.m_castResult.hit ? m_mover.m_castResult.normal.y : 0.0f;
+		DrawTextLine( "on ground %d, walkable %d, normal y %.2f", (int)m_mover.m_onGround,
+					  (int)m_mover.m_walkable, normalY );
+		DrawTextLine( "pogo length %.2f / %.2f", m_mover.m_pogoLength, m_mover.m_pogoRestLength );
+	}
+
+	static Sample* Create( SampleContext* context )
+	{
+		return new DynamicMoverSample( context );
+	}
+
+	static constexpr uint64_t StaticBit = 0x1;
+	static constexpr uint64_t MoverBit = 0x2;
+	static constexpr uint64_t GemBit = 0x4;
+	static constexpr uint64_t PlateBit = 0x8;
+	static constexpr uint64_t SphereBit = 0x10;
+	static constexpr uint64_t AllBits = ~0ull;
+
+	static constexpr uint64_t m_platformMaterial = 7;
+	static constexpr int m_platformCount = 2;
+	static constexpr int m_pillarCount = 6;
+	static constexpr int m_gemCount = 17;
+	static constexpr b3Pos m_sweeperCenter = { 0.0f, 0.0f, -16.0f };
+	static constexpr b3Pos m_plateCenter = { 0.0f, 0.05f, 26.5f };
+	static constexpr float m_plateTravel = 0.1f;
+
+	DynamicMover m_mover;
+	b3JointId m_plateJointId;
+	bool m_plateArmed;
+	b3BodyId m_platformIds[m_platformCount];
+	b3BodyId m_gemIds[m_gemCount];
+	int m_gemsLeft;
+	int m_lapCount;
+	float m_time;
+	float m_lapTime;
+	float m_bestLapTime;
+	bool m_jumpReleased;
+	bool m_drawProbes;
+};
+
+static int sampleDynamicMover =
+	RegisterSample( "Character", "Dynamic Mover", DynamicMoverSample::Create );
 
 struct ClosestShapeCastContext
 {

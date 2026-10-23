@@ -1186,7 +1186,7 @@ public:
 			m_plateArmed = true;
 		}
 
-		// Clouds
+		// Skittles
 		if constexpr ( m_isDebug == false )
 		{
 			b3ShapeDef boxShapeDef = b3DefaultShapeDef();
@@ -1197,10 +1197,24 @@ public:
 			boxShapeDef.density = 100.0f;
 			boxShapeDef.explosionScale = 0.05f;
 
-			b3HexColor colors[5] = { b3_colorDarkGray, b3_colorGray, b3_colorDimGray,
-									 b3_colorLightGray, b3_colorWhiteSmoke };
+			b3HexColor colors[5] = { b3_colorCrimson, b3_colorDarkOrange, b3_colorGold,
+									 b3_colorLimeGreen, b3_colorRebeccaPurple };
 
-			b3BoxHull box = b3MakeCubeHull( 0.1f );
+			constexpr int sides = 6;
+			float radius = 0.1f;
+			float halfHeight = 0.05f;
+			float bulge = 1.3f;
+			b3Vec3 points[3 * sides];
+			for ( int i = 0; i < sides; ++i )
+			{
+				b3CosSin cs = b3ComputeCosSin( 2.0f * B3_PI * i / sides );
+				b3Vec3 rim = { radius * cs.cosine, 0.0f, radius * cs.sine };
+				points[3 * i + 0] = { rim.x, -halfHeight, rim.z };
+				points[3 * i + 1] = { bulge * rim.x, 0.0f, bulge * rim.z };
+				points[3 * i + 2] = { rim.x, halfHeight, rim.z };
+			}
+
+			b3HullData* skittle = b3CreateHull( points, 3 * sides, 3 * sides );
 
 			int gridCount = 32;
 			int layerCount = 3;
@@ -1222,10 +1236,12 @@ public:
 											 m_plateCenter.z + offset + spacing * j };
 						b3BodyId boxId = b3CreateBody( m_worldId, &bodyDef );
 						boxShapeDef.baseMaterial.customColor = colors[( i + 3 * j ) % 5];
-						b3CreateHullShape( boxId, &boxShapeDef, &box.base );
+						b3CreateHullShape( boxId, &boxShapeDef, skittle );
 					}
 				}
 			}
+
+			b3DestroyHull( skittle );
 		}
 
 		// Big sphere
@@ -1336,7 +1352,6 @@ public:
 		sapp_lock_mouse( false );
 	}
 
-	// A thin static slab whose top face runs from the high point to the low point
 	void AddRamp( b3Vec3 high, b3Vec3 low, float halfWidth, b3HexColor color )
 	{
 		b3Vec3 axis = b3Sub( high, low );
@@ -1363,12 +1378,12 @@ public:
 	{
 		if ( index == 0 )
 		{
-			// Elevator, the top face rises from the ground to the first ledge
+			// Vertical
 			float y = 1.95f - 1.95f * cosf( 0.6f * time );
 			return { 14.0f, y, 0.0f };
 		}
 
-		// Shuttle between the two ledges
+		// Horizontal
 		float x = 25.0f - 3.5f * cosf( 0.5f * time );
 		return { x, 3.9f, 0.0f };
 	}
@@ -1389,7 +1404,6 @@ public:
 			{ 0.0f, 1.2f, -13.0f }, { -20.0f, 0.0f, 0.0f },
 		};
 
-		// The last gem waits on the tallest pillar
 		positions[m_gemCount - 1] = GetPillarTop( m_pillarCount - 1 );
 		positions[m_gemCount - 1].y += 1.2f;
 
@@ -1399,7 +1413,6 @@ public:
 		shapeDef.filter = { GemBit, MoverBit, 0 };
 		shapeDef.baseMaterial.customColor = b3_colorGold;
 
-		// Stand a cube on a corner so it reads as a gem
 		b3Quat tilt = b3MakeQuatFromAxisAngle( b3Normalize( { 1.0f, 0.0f, -1.0f } ), 0.9553f );
 		b3BoxHull gem = b3MakeTransformedBoxHull( 0.2f, 0.2f, 0.2f, { b3Vec3_zero, tilt } );
 
@@ -1420,7 +1433,6 @@ public:
 	{
 		float translation = b3PrismaticJoint_GetTranslation( m_plateJointId );
 
-		// Fire once per press. The plate has to spring back up to rearm.
 		if ( m_plateArmed && translation < -m_plateTravel + 0.01f )
 		{
 			b3ExplosionDef def = b3DefaultExplosionDef();
@@ -1483,14 +1495,13 @@ public:
 		}
 	}
 
-	// The box spans the capsule bounds. Mass is kept so the mover forces feel the same.
 	void SwapMoverShape()
 	{
 		b3BodyId bodyId = m_mover.GetBodyId();
-		float mass = b3Body_GetMass( bodyId );
 
 		b3ShapeId shapeId;
 		b3Body_GetShapes( bodyId, &shapeId, 1 );
+		float density = b3Shape_GetDensity( shapeId );
 		b3DestroyShape( shapeId, false );
 
 		b3ShapeDef shapeDef = b3DefaultShapeDef();
@@ -1506,14 +1517,14 @@ public:
 			float hy = 0.5f * b3Length( capsule.center2 - capsule.center1 ) + r;
 			b3BoxHull box =
 				b3MakeOffsetBoxHull( r, hy, r, b3Lerp( capsule.center1, capsule.center2, 0.5f ) );
-			shapeDef.density = mass / ( 8.0f * r * hy * r );
+			shapeDef.density = density;
 			b3CreateHullShape( bodyId, &shapeDef, &box.base );
 		}
 		else
 		{
 			float r = capsule.radius;
 			float h = b3Length( capsule.center2 - capsule.center1 );
-			shapeDef.density = mass / ( B3_PI * r * r * ( h + 4.0f * r / 3.0f ) );
+			shapeDef.density = density;
 			b3CreateCapsuleShape( bodyId, &shapeDef, &capsule );
 		}
 	}
@@ -1530,7 +1541,6 @@ public:
 		bool hit;
 	};
 
-	// The launcher follows the view direction so the mouse alone sets the aim
 	Aim ComputeAim() const
 	{
 		Aim aim = {};
@@ -1547,7 +1557,6 @@ public:
 		aim.muzzle = aim.shoulder + ( m_launcherFront + m_launcherRadius ) * aim.direction;
 		aim.velocity = m_ballSpeed * aim.direction;
 
-		// March the arc to find where the ball lands
 		b3Vec3 gravity = b3World_GetGravity( m_worldId );
 		b3QueryFilter filter = { ProjectileBit, AllBits & ~MoverBit, 0, "aim" };
 		float maxTime = 3.0f;
@@ -1609,22 +1618,6 @@ public:
 
 	void DrawAim( const Aim& aim ) const
 	{
-		// The dark outline keeps the crosshair readable against bright surfaces
-		ImVec2 center = { 0.5f * ImGui::GetIO().DisplaySize.x,
-						  0.5f * ImGui::GetIO().DisplaySize.y };
-		ImDrawList* drawList = ImGui::GetForegroundDrawList();
-		ImU32 outlineColor = IM_COL32( 0, 0, 0, 200 );
-		ImU32 crossColor = IM_COL32( 255, 255, 255, 230 );
-		float size = 10.0f;
-		drawList->AddLine( { center.x - size, center.y }, { center.x + size, center.y },
-						   outlineColor, 5.0f );
-		drawList->AddLine( { center.x, center.y - size }, { center.x, center.y + size },
-						   outlineColor, 5.0f );
-		drawList->AddLine( { center.x - size, center.y }, { center.x + size, center.y }, crossColor,
-						   2.0f );
-		drawList->AddLine( { center.x, center.y - size }, { center.x, center.y + size }, crossColor,
-						   2.0f );
-
 		// The cylinder axis is local y. Rolling with the camera right keeps the flats steady as the
 		// view turns.
 		b3Matrix3 basis = { aim.right, aim.direction, b3Cross( aim.right, aim.direction ) };
@@ -1632,23 +1625,6 @@ public:
 		b3Transform relative = b3ToRelativeTransform( launcherTransform, GetDrawOrigin() );
 		AppendMesh( m_launcherMesh, relative, b3Vec3_one, MakeColor( b3_colorDimGray ), 0.6f, 0.35f,
 					MESH_MATERIAL_MODE_SOLID, 0.0f, TRANSPARENT_SHADOW_FULL );
-
-		b3HexColor arcColor = aim.hit ? b3_colorOrange : b3_colorGray;
-		b3Vec3 gravity = b3World_GetGravity( m_worldId );
-		constexpr int segmentCount = 30;
-		b3Pos p1 = aim.muzzle;
-		for ( int i = 1; i <= segmentCount; ++i )
-		{
-			float t = aim.flightTime * i / segmentCount;
-			b3Pos p2 = aim.muzzle + t * aim.velocity + ( 0.5f * t * t ) * gravity;
-			DrawLine( p1, p2, MakeColor( arcColor ) );
-			p1 = p2;
-		}
-
-		if ( aim.hit )
-		{
-			DrawPoint( aim.impact, 10.0f, MakeColor( b3_colorRed ) );
-		}
 	}
 
 	void MouseDown( b3Vec2 p, int button, int modifiers ) override
@@ -1852,11 +1828,12 @@ public:
 
 		if ( m_aiming )
 		{
-			DrawAim( ComputeAim() );
+			Aim aim = ComputeAim();
+			DrawAim( aim );
 		}
 
-		DrawTextLine( "WASD = move, Space = jump, Shift = sprint, Ctrl = walk, T = camera, RMB = "
-					  "aim, LMB = shoot" );
+		DrawTextLine( "WASD = move, Space = jump, Shift = sprint, Ctrl = walk" );
+		DrawTextLine( "T = camera, RMB = aim, LMB = shoot" );
 		DrawTextLine( "gems %d / %d, lap time %.1f s", m_gemCount - m_gemsLeft, m_gemCount,
 					  m_lapTime );
 

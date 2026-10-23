@@ -145,7 +145,8 @@ void DynamicMover::Create( b3WorldId worldId, const DynamicMoverDef* def )
 	b3ShapeDef shapeDef = b3DefaultShapeDef();
 	shapeDef.density = def->density;
 
-	// The mover joint and the pogo joint handle all the movement, surface friction would fight them
+	// The mover joint and the pogo joint handle all the movement, surface friction would fight
+	// them.
 	shapeDef.baseMaterial.friction = 0.0f;
 	shapeDef.baseMaterial.restitution = 0.0f;
 	shapeDef.filter = def->filter;

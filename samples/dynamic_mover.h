@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "box3d/collision.h"
 #include "box3d/types.h"
 
 struct DynamicMoverDef
@@ -11,7 +10,6 @@ struct DynamicMoverDef
 	b3Pos position = {};
 	b3Capsule capsule = { { 0.0f, -0.5f, 0.0f }, { 0.0f, 0.5f, 0.0f }, 0.3f };
 
-	// About 80 kilograms for the default capsule
 	float density = 200.0f;
 
 	b3Filter filter = b3DefaultFilter();
@@ -20,7 +18,7 @@ struct DynamicMoverDef
 	float minSpeed = 0.1f;
 	float stopSpeed = 3.0f;
 	float accelerate = 20.0f;
-	float airSteer = 0.5f;
+	float airSteer = 0.25f;
 	float friction = 8.0f;
 	float gravityScale = 1.5f;
 	float maxGroundForce = 6000.0f;
@@ -84,6 +82,11 @@ public:
 
 	// Gravity scale is used to size the pogo forces, so change it here.
 	void SetGravityScale( float gravityScale );
+
+	b3BodyId GetBodyId() const
+	{
+		return m_moverId;
+	}
 
 	void Draw() const;
 

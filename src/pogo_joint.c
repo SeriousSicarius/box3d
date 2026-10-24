@@ -300,8 +300,8 @@ void b3DrawPogoJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base, b3Wor
 
 	float force = world->inv_h * joint->impulse;
 
-	// todo comment
-	float saturation = 0.999f;
+	// Tolerance for reaching max force.
+	float saturation = 0.99f;
 
 	b3HexColor color;
 	if ( joint->hertz == 0.0f )
@@ -329,6 +329,7 @@ void b3DrawPogoJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base, b3Wor
 		color = b3_colorLightGray;
 	}
 
+	// Spring
 	int segmentCount = 12;
 	float width = 0.1f * scale;
 	b3Pos p1 = pB;
@@ -341,6 +342,7 @@ void b3DrawPogoJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base, b3Wor
 		p1 = p2;
 	}
 
+	// Ground plane
 	b3Pos rest = b3OffsetPos( pB, b3MulSV( -joint->restLength, axis ) );
 	float tick = 1.5f * width;
 	draw->DrawSegmentFcn( b3OffsetPos( rest, b3MulSV( -tick, perp1 ) ), b3OffsetPos( rest, b3MulSV( tick, perp1 ) ),

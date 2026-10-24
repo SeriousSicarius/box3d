@@ -192,16 +192,31 @@ void b3SolveMoverJoint( b3JointSim* base, b3StepContext* context )
 	}
 }
 
-void b3DrawMoverJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base,
-					   b3WorldTransform transformA, b3WorldTransform transformB )
+static b3HexColor b3LerpColor( b3HexColor a, b3HexColor b, float t )
 {
-	B3_UNUSED( draw, world, base, transformA, transformB );
-	B3_ASSERT( base->type == b3_moverJoint );
+	uint32_t result = 0;
+	for ( int shift = 0; shift < 24; shift += 8 )
+	{
+		float ca = (float)( ( (uint32_t)a >> shift ) & 0xFF );
+		float cb = (float)( ( (uint32_t)b >> shift ) & 0xFF );
+		uint32_t c = (uint32_t)( b3LerpFloat( ca, cb, t ) + 0.5f );
+		result |= c << shift;
+	}
+	return (b3HexColor)result;
+}
 
-#if 0
+void b3DrawMoverJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base, b3WorldTransform transformA,
+					   b3WorldTransform transformB )
+{
+	B3_ASSERT( base->type == b3_moverJoint );
+	B3_UNUSED( transformA );
+
 	b3MoverJoint* joint = &base->moverJoint;
 
-	b3Pos pB = b3TransformWorldPoint( transformB, base->localFrameB.p );
+	b3WorldTransform frameB = b3MulWorldTransforms( transformB, base->localFrameB );
+	b3Matrix3 matrixB = b3MakeMatrixFromQuat( frameB.q );
+	b3Vec3 axisX = matrixB.cx;
+	b3Vec3 axisZ = matrixB.cz;
 
 	b3Body* bodyA = b3Array_Get( world->bodies, base->bodyIdA );
 	b3Body* bodyB = b3Array_Get( world->bodies, base->bodyIdB );
@@ -209,54 +224,33 @@ void b3DrawMoverJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base,
 	b3BodyState* stateB = b3GetBodyState( world, bodyB );
 	b3Vec3 vA = stateA != NULL ? stateA->linearVelocity : b3Vec3_zero;
 	b3Vec3 vB = stateB != NULL ? stateB->linearVelocity : b3Vec3_zero;
-	b3Vec3 relativeVelocity = b3Sub( vB, vA );
 
-	b3Vec3 maxForce = joint->maxForce;
-	b3Vec3 force = b3MulSV( world->inv_h, joint->impulse );
+	b3Vec3 error = b3Sub( b3Sub( vB, vA ), joint->linearVelocity );
+	b3Vec2 planeError = { b3Dot( error, axisX ), b3Dot( error, axisZ ) };
+	b3Vec2 planeTarget = { b3Dot( joint->linearVelocity, axisX ), b3Dot( joint->linearVelocity, axisZ ) };
 
-	// todo comment
-	float saturation = 0.999f;
-	bool saturated = ( maxForce.x > 0.0f && b3AbsFloat( force.x ) >= saturation * maxForce.x ) ||
-					 ( maxForce.y > 0.0f && b3AbsFloat( force.y ) >= saturation * maxForce.y ) ||
-					 ( maxForce.z > 0.0f && b3AbsFloat( force.z ) >= saturation * maxForce.z );
+	// Colorize ring by ratio of actual speed to target speed.
+	float referenceSpeed = b3MaxFloat( b3Length2( planeTarget ), 1.0f );
+	float t = b3ClampFloat( b3Length2( planeError ) / referenceSpeed, 0.0f, 1.0f );
+	b3HexColor color = b3LerpColor( b3_colorLimeGreen, b3_colorRed, t );
 
-	// todo comment
-	b3Vec3 target = {
-		maxForce.x > 0.0f ? joint->linearVelocity.x : relativeVelocity.x,
-		maxForce.y > 0.0f ? joint->linearVelocity.y : relativeVelocity.y,
-		maxForce.z > 0.0f ? joint->linearVelocity.z : relativeVelocity.z,
-	};
-
-	b3HexColor targetColor = saturated ? b3_colorRed : b3_colorLimeGreen;
-	b3Pos targetTip = b3OffsetPos( pB, target );
-	draw->DrawSegmentFcn( pB, targetTip, targetColor, draw->context );
-	draw->DrawPointFcn( targetTip, 6.0f, targetColor, draw->context );
-
-	b3Pos velocityTip = b3OffsetPos( pB, relativeVelocity );
-	draw->DrawSegmentFcn( pB, velocityTip, b3_colorLightSkyBlue, draw->context );
-	draw->DrawPointFcn( velocityTip, 4.0f, b3_colorLightSkyBlue, draw->context );
-
-	draw->DrawPointFcn( pB, 8.0f, b3_colorPlum, draw->context );
-
-	if ( draw->drawJointExtras )
+	const int segmentCount = 32;
+	b3Pos p1 = b3OffsetPos( frameB.p, axisX );
+	for ( int i = 1; i <= segmentCount; ++i )
 	{
-		if ( bodyA->type != b3_staticBody )
-		{
-			draw->DrawSegmentFcn( pB, transformA.p, b3_colorDimGray, draw->context );
-		}
-
-		b3WorldTransform boxTransform = { pB, b3Quat_identity };
-		draw->DrawBoxFcn( b3MulSV( draw->forceScale, maxForce ), boxTransform, b3_colorGray,
-						  draw->context );
-
-		b3HexColor forceColor = saturated ? b3_colorRed : b3_colorAzure;
-		draw->DrawSegmentFcn( pB, b3OffsetPos( pB, b3MulSV( draw->forceScale, force ) ), forceColor,
-							  draw->context );
-
-		char buffer[96];
-		snprintf( buffer, 96, "f = (%.1f, %.1f, %.1f)", force.x, force.y, force.z );
-		draw->DrawStringFcn( pB, buffer, forceColor, draw->context );
+		float angle = 2.0f * B3_PI * i / segmentCount;
+		b3CosSin cs = b3ComputeCosSin( angle );
+		b3Pos p2 = b3OffsetPos( frameB.p, b3Blend2( cs.cosine, axisX, cs.sine, axisZ ) );
+		draw->DrawSegmentFcn( p1, p2, color, draw->context );
+		p1 = p2;
 	}
 
-#endif
+	if ( joint->maxForce > 0.0f )
+	{
+		float scale = world->inv_h / joint->maxForce;
+		b3Vec3 force = b3Blend2( scale * joint->impulse.x, axisX, scale * joint->impulse.y, axisZ );
+		b3Pos tip = b3OffsetPos( frameB.p, force );
+		draw->DrawSegmentFcn( frameB.p, tip, b3_colorAzure, draw->context );
+		draw->DrawPointFcn( tip, 6.0f, b3_colorAzure, draw->context );
+	}
 }

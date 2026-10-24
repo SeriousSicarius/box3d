@@ -155,14 +155,14 @@ void DynamicMover::Create( b3WorldId worldId, const DynamicMoverDef* def )
 
 	b3CreateCapsuleShape( m_moverId, &shapeDef, &m_capsule );
 
-	CreateMoverJoint( m_groundId, { m_maxGroundForce, 0.0f, m_maxGroundForce } );
+	CreateMoverJoint( m_groundId );
 }
 
-void DynamicMover::CreateMoverJoint( b3BodyId baseId, b3Vec3 maxForce )
+void DynamicMover::CreateMoverJoint( b3BodyId baseId )
 {
 	b3MoverJointDef moverDef = b3DefaultMoverJointDef();
 	moverDef.linearVelocity = m_velocity;
-	moverDef.maxVelocityForce = maxForce;
+	moverDef.maxForce = m_maxGroundForce;
 	moverDef.base.bodyIdA = baseId;
 	moverDef.base.bodyIdB = m_moverId;
 	moverDef.base.collideConnected = true;
@@ -355,9 +355,8 @@ void DynamicMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec2 
 
 	if ( B3_ID_EQUALS( b3Joint_GetBodyA( m_moverJointId ), baseId ) == false )
 	{
-		b3Vec3 maxForce = b3MoverJoint_GetMaxVelocityForce( m_moverJointId );
 		b3DestroyJoint( m_moverJointId, false );
-		CreateMoverJoint( baseId, maxForce );
+		CreateMoverJoint( baseId );
 	}
 
 	m_velocity = b3Body_GetLinearVelocity( m_moverId ) - b3Body_GetLinearVelocity( baseId );
@@ -396,7 +395,7 @@ void DynamicMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec2 
 		maxForce = m_maxAirForce;
 	}
 
-	b3MoverJoint_SetMaxVelocityForce( m_moverJointId, { maxForce, 0.0f, maxForce } );
+	b3MoverJoint_SetMaxVelocityForce( m_moverJointId, maxForce );
 
 	float maxSpeed = speedScale * m_maxSpeed;
 	b3Vec3 desiredVelocity = maxSpeed * throttle.x * forward + maxSpeed * throttle.y * right;
@@ -499,8 +498,4 @@ void DynamicMover::Draw() const
 		DrawLine( probe.origin, end, MakeColor( color ) );
 		DrawPoint( end, 6.0f, MakeColor( color ) );
 	}
-
-	b3Pos position = b3Body_GetPosition( m_moverId );
-	b3HexColor color = m_onGround ? b3_colorOrange : b3_colorAquamarine;
-	DrawLine( position, position + m_velocity, MakeColor( color ) );
 }

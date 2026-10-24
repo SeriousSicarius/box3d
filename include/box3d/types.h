@@ -769,8 +769,8 @@ typedef struct b3MotorJointDef
 /// @ingroup motor_joint
 B3_API b3MotorJointDef b3DefaultMotorJointDef( void );
 
-/// A mover joint is used to move a dynamic character mover through velocity commands. The x, y, and
-/// z directions are handled separately. Does not affect rotation.
+/// A mover joint is used to move a dynamic character mover through velocity commands. Force is only
+/// applied in the xz plane of joint frame B. Does not affect rotation.
 /// @ingroup mover_joint
 typedef struct b3MoverJointDef
 {
@@ -781,7 +781,7 @@ typedef struct b3MoverJointDef
 	b3Vec3 linearVelocity;
 
 	/// The maximum motor force in newtons.
-	b3Vec3 maxVelocityForce;
+	float maxForce;
 } b3MoverJointDef;
 
 /// Use this to initialize your joint definition

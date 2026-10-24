@@ -315,10 +315,10 @@ static int TestMoverJoint( void )
 	ENSURE( gotVelocity.x == 1.0f && gotVelocity.y == 2.0f && gotVelocity.z == -3.0f );
 
 	// The y axis has no force budget, so it must stay at rest while x and z reach the target
-	b3Vec3 maxForce = { 1000.0f, 0.0f, 1000.0f };
+	float maxForce = 1000.0f;
 	b3MoverJoint_SetMaxVelocityForce( jointId, maxForce );
-	b3Vec3 gotForce = b3MoverJoint_GetMaxVelocityForce( jointId );
-	ENSURE( gotForce.x == 1000.0f && gotForce.y == 0.0f && gotForce.z == 1000.0f );
+	float gotForce = b3MoverJoint_GetMaxVelocityForce( jointId );
+	ENSURE( gotForce == 1000.0f );
 
 	for ( int i = 0; i < 30; ++i )
 	{

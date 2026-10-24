@@ -160,5 +160,5 @@ public:
 	int m_selectedProbe;
 
 private:
-	void CreateMoverJoint( b3BodyId baseId, b3Vec3 maxForce );
+	void CreateMoverJoint( b3BodyId baseId );
 };

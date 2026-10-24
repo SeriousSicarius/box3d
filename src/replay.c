@@ -654,7 +654,7 @@ b3MoverJointDef b3RecR_MOVERJOINTDEF( b3RecReader* rdr )
 	b3MoverJointDef def = b3DefaultMoverJointDef();
 	b3RecR_JointBase( rdr, &def.base );
 	def.linearVelocity = b3RecR_VEC3( rdr );
-	def.maxVelocityForce = b3RecR_VEC3( rdr );
+	def.maxForce = b3RecR_F32( rdr );
 	return def;
 }
 

@@ -124,9 +124,11 @@ typedef struct b3MotorJoint
 typedef struct b3MoverJoint
 {
 	b3Vec3 linearVelocity;
-	b3Vec3 maxVelocityForce;
+	float maxForce;
 
-	b3Vec3 linearVelocityImpulse;
+	b3Vec3 axisX;
+	b3Vec3 axisZ;
+	b3Vec2 impulse;
 
 	int indexA;
 	int indexB;
@@ -448,6 +450,10 @@ void b3SolveWeldJoint( b3JointSim* base, b3StepContext* context, bool useBias );
 void b3SolveWheelJoint( b3JointSim* base, b3StepContext* context, bool useBias );
 
 void b3DrawDistanceJoint( b3DebugDraw* draw, b3JointSim* base, b3WorldTransform transformA, b3WorldTransform transformB );
+void b3DrawMoverJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base, b3WorldTransform transformA,
+					   b3WorldTransform transformB );
+void b3DrawPogoJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base, b3WorldTransform transformA,
+					  b3WorldTransform transformB, float scale );
 void b3DrawParallelJoint( b3DebugDraw* draw, b3JointSim* base, b3WorldTransform transformA, b3WorldTransform transformB, float scale );
 void b3DrawPrismaticJoint( b3DebugDraw* draw, b3JointSim* base, b3WorldTransform transformA, b3WorldTransform transformB, float scale );
 void b3DrawRevoluteJoint( b3DebugDraw* draw, b3JointSim* base, b3WorldTransform transformA, b3WorldTransform transformB, float scale );

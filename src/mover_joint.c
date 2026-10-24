@@ -4,7 +4,6 @@
 #include "body.h"
 #include "core.h"
 #include "joint.h"
-#include "math_internal.h"
 #include "physics_world.h"
 #include "recording.h"
 #include "solver.h"
@@ -12,6 +11,8 @@
 
 // needed for dll export
 #include "box3d/box3d.h"
+
+#include <stdio.h>
 
 void b3MoverJoint_SetLinearVelocity( b3JointId jointId, b3Vec3 velocity )
 {
@@ -28,24 +29,26 @@ b3Vec3 b3MoverJoint_GetLinearVelocity( b3JointId jointId )
 	return joint->moverJoint.linearVelocity;
 }
 
-void b3MoverJoint_SetMaxVelocityForce( b3JointId jointId, b3Vec3 maxForce )
+void b3MoverJoint_SetMaxVelocityForce( b3JointId jointId, float maxForce )
 {
-	B3_ASSERT( b3IsValidVec3( maxForce ) );
+	B3_ASSERT( b3IsValidFloat( maxForce ) && maxForce >= 0.0f );
 	b3World* world = b3GetWorld( jointId.world0 );
 	B3_REC( world, MoverJointSetMaxVelocityForce, jointId, maxForce );
 	b3JointSim* joint = b3GetJointSimCheckType( jointId, b3_moverJoint );
-	joint->moverJoint.maxVelocityForce = maxForce;
+	joint->moverJoint.maxForce = maxForce;
 }
 
-b3Vec3 b3MoverJoint_GetMaxVelocityForce( b3JointId jointId )
+float b3MoverJoint_GetMaxVelocityForce( b3JointId jointId )
 {
 	b3JointSim* joint = b3GetJointSimCheckType( jointId, b3_moverJoint );
-	return joint->moverJoint.maxVelocityForce;
+	return joint->moverJoint.maxForce;
 }
 
 b3Vec3 b3GetMoverJointForce( b3World* world, b3JointSim* base )
 {
-	return b3MulSV( world->inv_h, base->moverJoint.linearVelocityImpulse );
+	b3MoverJoint* joint = &base->moverJoint;
+	b3Vec3 P = b3Blend2( joint->impulse.x, joint->axisX, joint->impulse.y, joint->axisZ );
+	return b3MulSV( world->inv_h, P );
 }
 
 void b3PrepareMoverJoint( b3JointSim* base, b3StepContext* context )
@@ -83,12 +86,17 @@ void b3PrepareMoverJoint( b3JointSim* base, b3StepContext* context )
 	joint->indexA = bodyA->setIndex == b3_awakeSet ? localIndexA : B3_NULL_INDEX;
 	joint->indexB = bodyB->setIndex == b3_awakeSet ? localIndexB : B3_NULL_INDEX;
 
+	b3Quat quatB = b3MulQuat( bodySimB->transform.q, base->localFrameB.q );
+	b3Matrix3 matrixB = b3MakeMatrixFromQuat( quatB );
+	joint->axisX = matrixB.cx;
+	joint->axisZ = matrixB.cz;
+
 	float k = mA + mB;
 	joint->linearMass = k > 0.0f ? 1.0f / k : 0.0f;
 
 	if ( context->enableWarmStarting == false )
 	{
-		joint->linearVelocityImpulse = b3Vec3_zero;
+		joint->impulse = (b3Vec2){ 0 };
 	}
 }
 
@@ -109,16 +117,15 @@ void b3WarmStartMoverJoint( b3JointSim* base, b3StepContext* context )
 	b3BodyState* stateB =
 		joint->indexB == B3_NULL_INDEX ? &dummyState : context->states + joint->indexB;
 
+	b3Vec3 P = b3Blend2( joint->impulse.x, joint->axisX, joint->impulse.y, joint->axisZ );
 	if ( stateA->flags & b3_dynamicFlag )
 	{
-		stateA->linearVelocity =
-			b3MulSub( stateA->linearVelocity, mA, joint->linearVelocityImpulse );
+		stateA->linearVelocity = b3MulSub( stateA->linearVelocity, mA, P );
 	}
 
 	if ( stateB->flags & b3_dynamicFlag )
 	{
-		stateB->linearVelocity =
-			b3MulAdd( stateB->linearVelocity, mB, joint->linearVelocityImpulse );
+		stateB->linearVelocity = b3MulAdd( stateB->linearVelocity, mB, P );
 	}
 }
 
@@ -141,24 +148,37 @@ void b3SolveMoverJoint( b3JointSim* base, b3StepContext* context )
 	b3Vec3 vA = stateA->linearVelocity;
 	b3Vec3 vB = stateB->linearVelocity;
 
-	b3Vec3 maxForce = joint->maxVelocityForce;
-	if ( maxForce.x > 0.0f || maxForce.y > 0.0f || maxForce.z > 0.0f )
+	float maxForce = joint->maxForce;
+	if ( maxForce > 0.0f )
 	{
-		b3Vec3 cdot = b3Sub( b3Sub( vB, vA ), joint->linearVelocity );
-		b3Vec3 impulse = b3MulSV( -joint->linearMass, cdot );
+		b3Vec3 vr = b3Sub( b3Sub( vB, vA ), joint->linearVelocity );
+		b3Vec2 cdot = { b3Dot( vr, joint->axisX ), b3Dot( vr, joint->axisZ ) };
+		b3Vec2 deltaImpulse = b3MulSV2( -joint->linearMass, cdot );
+		b3Vec2 newImpulse = {
+			joint->impulse.x + deltaImpulse.x,
+			joint->impulse.y + deltaImpulse.y,
+		};
 
-		b3Vec3 oldImpulse = joint->linearVelocityImpulse;
-		b3Vec3 maxImpulse = b3MulSV( context->h, maxForce );
-		joint->linearVelocityImpulse =
-			b3Clamp( b3Add( oldImpulse, impulse ), b3Neg( maxImpulse ), maxImpulse );
-		impulse = b3Sub( joint->linearVelocityImpulse, oldImpulse );
+		float maxImpulse = context->h * maxForce;
 
-		vA = b3MulSub( vA, mA, impulse );
-		vB = b3MulAdd( vB, mB, impulse );
+		float lengthSquared = b3Dot2( newImpulse, newImpulse );
+		if ( lengthSquared > maxImpulse * maxImpulse )
+		{
+			float scale = maxImpulse / sqrtf( lengthSquared );
+			newImpulse.x *= scale;
+			newImpulse.y *= scale;
+		}
+
+		deltaImpulse = b3Sub2( newImpulse, joint->impulse );
+		joint->impulse = newImpulse;
+
+		b3Vec3 P = b3Blend2( deltaImpulse.x, joint->axisX, deltaImpulse.y, joint->axisZ );
+		vA = b3MulSub( vA, mA, P );
+		vB = b3MulAdd( vB, mB, P );
 	}
 	else
 	{
-		joint->linearVelocityImpulse = b3Vec3_zero;
+		joint->impulse = (b3Vec2){ 0.0f, 0.0f };
 	}
 
 	if ( stateA->flags & b3_dynamicFlag )
@@ -170,4 +190,73 @@ void b3SolveMoverJoint( b3JointSim* base, b3StepContext* context )
 	{
 		stateB->linearVelocity = vB;
 	}
+}
+
+void b3DrawMoverJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base,
+					   b3WorldTransform transformA, b3WorldTransform transformB )
+{
+	B3_UNUSED( draw, world, base, transformA, transformB );
+	B3_ASSERT( base->type == b3_moverJoint );
+
+#if 0
+	b3MoverJoint* joint = &base->moverJoint;
+
+	b3Pos pB = b3TransformWorldPoint( transformB, base->localFrameB.p );
+
+	b3Body* bodyA = b3Array_Get( world->bodies, base->bodyIdA );
+	b3Body* bodyB = b3Array_Get( world->bodies, base->bodyIdB );
+	b3BodyState* stateA = b3GetBodyState( world, bodyA );
+	b3BodyState* stateB = b3GetBodyState( world, bodyB );
+	b3Vec3 vA = stateA != NULL ? stateA->linearVelocity : b3Vec3_zero;
+	b3Vec3 vB = stateB != NULL ? stateB->linearVelocity : b3Vec3_zero;
+	b3Vec3 relativeVelocity = b3Sub( vB, vA );
+
+	b3Vec3 maxForce = joint->maxForce;
+	b3Vec3 force = b3MulSV( world->inv_h, joint->impulse );
+
+	// todo comment
+	float saturation = 0.999f;
+	bool saturated = ( maxForce.x > 0.0f && b3AbsFloat( force.x ) >= saturation * maxForce.x ) ||
+					 ( maxForce.y > 0.0f && b3AbsFloat( force.y ) >= saturation * maxForce.y ) ||
+					 ( maxForce.z > 0.0f && b3AbsFloat( force.z ) >= saturation * maxForce.z );
+
+	// todo comment
+	b3Vec3 target = {
+		maxForce.x > 0.0f ? joint->linearVelocity.x : relativeVelocity.x,
+		maxForce.y > 0.0f ? joint->linearVelocity.y : relativeVelocity.y,
+		maxForce.z > 0.0f ? joint->linearVelocity.z : relativeVelocity.z,
+	};
+
+	b3HexColor targetColor = saturated ? b3_colorRed : b3_colorLimeGreen;
+	b3Pos targetTip = b3OffsetPos( pB, target );
+	draw->DrawSegmentFcn( pB, targetTip, targetColor, draw->context );
+	draw->DrawPointFcn( targetTip, 6.0f, targetColor, draw->context );
+
+	b3Pos velocityTip = b3OffsetPos( pB, relativeVelocity );
+	draw->DrawSegmentFcn( pB, velocityTip, b3_colorLightSkyBlue, draw->context );
+	draw->DrawPointFcn( velocityTip, 4.0f, b3_colorLightSkyBlue, draw->context );
+
+	draw->DrawPointFcn( pB, 8.0f, b3_colorPlum, draw->context );
+
+	if ( draw->drawJointExtras )
+	{
+		if ( bodyA->type != b3_staticBody )
+		{
+			draw->DrawSegmentFcn( pB, transformA.p, b3_colorDimGray, draw->context );
+		}
+
+		b3WorldTransform boxTransform = { pB, b3Quat_identity };
+		draw->DrawBoxFcn( b3MulSV( draw->forceScale, maxForce ), boxTransform, b3_colorGray,
+						  draw->context );
+
+		b3HexColor forceColor = saturated ? b3_colorRed : b3_colorAzure;
+		draw->DrawSegmentFcn( pB, b3OffsetPos( pB, b3MulSV( draw->forceScale, force ) ), forceColor,
+							  draw->context );
+
+		char buffer[96];
+		snprintf( buffer, 96, "f = (%.1f, %.1f, %.1f)", force.x, force.y, force.z );
+		draw->DrawStringFcn( pB, buffer, forceColor, draw->context );
+	}
+
+#endif
 }

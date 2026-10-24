@@ -1368,21 +1368,21 @@ B3_API float b3MotorJoint_GetMaxSpringTorque( b3JointId jointId );
  * @{
  */
 
-/// Create a mover joint
+/// Create a mover joint.
 /// @see b3MoverJointDef for details
 B3_API b3JointId b3CreateMoverJoint( b3WorldId worldId, const b3MoverJointDef* def );
 
-/// Set the desired relative linear velocity in meters per second
+/// Set the desired relative linear velocity, usually in meters per second.
 B3_API void b3MoverJoint_SetLinearVelocity( b3JointId jointId, b3Vec3 velocity );
 
-/// Get the desired relative linear velocity in meters per second
+/// Get the desired relative linear velocity, usually in meters per second.
 B3_API b3Vec3 b3MoverJoint_GetLinearVelocity( b3JointId jointId );
 
-/// Set the joint maximum force, usually in newtons
-B3_API void b3MoverJoint_SetMaxVelocityForce( b3JointId jointId, b3Vec3 maxForce );
+/// Set the joint maximum force, usually in newtons.
+B3_API void b3MoverJoint_SetMaxVelocityForce( b3JointId jointId, float maxForce );
 
-/// Get the joint maximum force, usually in newtons
-B3_API b3Vec3 b3MoverJoint_GetMaxVelocityForce( b3JointId jointId );
+/// Get the joint maximum force, usually in newtons.
+B3_API float b3MoverJoint_GetMaxVelocityForce( b3JointId jointId );
 
 /**@}*/ // mover_joint
 

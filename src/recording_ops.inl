@@ -215,7 +215,7 @@ B3_REC_OP( 0xE7, WheelJointSetTargetSteeringAngle, RET_NONE, ARG( JOINTID, joint
 // Mover joint
 B3_REC_OP( 0x81, CreateMoverJoint, RET_JOINTID, ARG( WORLDID, world ) ARG( MOVERJOINTDEF, def ) )
 B3_REC_OP( 0x82, MoverJointSetLinearVelocity, RET_NONE, ARG( JOINTID, joint ) ARG( VEC3, velocity ) )
-B3_REC_OP( 0x83, MoverJointSetMaxVelocityForce, RET_NONE, ARG( JOINTID, joint ) ARG( VEC3, maxForce ) )
+B3_REC_OP( 0x83, MoverJointSetMaxVelocityForce, RET_NONE, ARG( JOINTID, joint ) ARG( F32, maxForce ) )
 
 // Pogo joint
 B3_REC_OP( 0x84, CreatePogoJoint, RET_JOINTID, ARG( WORLDID, world ) ARG( POGOJOINTDEF, def ) )

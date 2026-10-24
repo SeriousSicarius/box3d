@@ -13,6 +13,8 @@
 // needed for dll export
 #include "box3d/box3d.h"
 
+#include <stdio.h>
+
 void b3PogoJoint_SetRestLength( b3JointId jointId, float length )
 {
 	B3_ASSERT( b3IsValidFloat( length ) && length >= 0.0f );
@@ -277,5 +279,88 @@ void b3SolvePogoJoint( b3JointSim* base, b3StepContext* context, bool useBias )
 	{
 		stateB->linearVelocity = vB;
 		stateB->angularVelocity = wB;
+	}
+}
+
+void b3DrawPogoJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base, b3WorldTransform transformA,
+					  b3WorldTransform transformB, float scale )
+{
+	B3_ASSERT( base->type == b3_pogoJoint );
+
+	b3PogoJoint* joint = &base->pogoJoint;
+
+	b3Pos pA = b3TransformWorldPoint( transformA, base->localFrameA.p );
+	b3Pos pB = b3TransformWorldPoint( transformB, base->localFrameB.p );
+	b3Vec3 axis = b3RotateVector( b3MulQuat( transformB.q, base->localFrameB.q ), b3Vec3_axisY );
+	b3Vec3 perp1 = b3Perp( axis );
+	b3Vec3 perp2 = b3Cross( axis, perp1 );
+
+	float length = b3Dot( b3SubPos( pB, pA ), axis );
+	b3Pos foot = b3OffsetPos( pB, b3MulSV( -length, axis ) );
+
+	float force = world->inv_h * joint->impulse;
+
+	// todo comment
+	float saturation = 0.999f;
+
+	b3HexColor color;
+	if ( joint->hertz == 0.0f )
+	{
+		color = b3_colorGray;
+	}
+	else if ( force > 0.0f && force >= saturation * joint->maxCompressionForce )
+	{
+		color = b3_colorRed;
+	}
+	else if ( force < 0.0f && -force >= saturation * joint->maxTensionForce )
+	{
+		color = b3_colorRed;
+	}
+	else if ( force > 0.0f )
+	{
+		color = b3_colorLimeGreen;
+	}
+	else if ( force < 0.0f )
+	{
+		color = b3_colorDeepSkyBlue;
+	}
+	else
+	{
+		color = b3_colorLightGray;
+	}
+
+	int segmentCount = 12;
+	float width = 0.1f * scale;
+	b3Pos p1 = pB;
+	for ( int i = 1; i <= segmentCount; ++i )
+	{
+		float side = i == segmentCount ? 0.0f : ( i & 1 ) ? width : -width;
+		float t = (float)i / (float)segmentCount;
+		b3Pos p2 = b3OffsetPos( pB, b3MulAdd( b3MulSV( -t * length, axis ), side, perp1 ) );
+		draw->DrawSegmentFcn( p1, p2, color, draw->context );
+		p1 = p2;
+	}
+
+	b3Pos rest = b3OffsetPos( pB, b3MulSV( -joint->restLength, axis ) );
+	float tick = 1.5f * width;
+	draw->DrawSegmentFcn( b3OffsetPos( rest, b3MulSV( -tick, perp1 ) ), b3OffsetPos( rest, b3MulSV( tick, perp1 ) ),
+						  b3_colorWhite, draw->context );
+	draw->DrawSegmentFcn( b3OffsetPos( rest, b3MulSV( -tick, perp2 ) ), b3OffsetPos( rest, b3MulSV( tick, perp2 ) ),
+						  b3_colorWhite, draw->context );
+
+	if ( b3Length( b3SubPos( pA, foot ) ) > B3_LINEAR_SLOP )
+	{
+		draw->DrawSegmentFcn( foot, pA, b3_colorDimGray, draw->context );
+	}
+
+	draw->DrawPointFcn( pA, 6.0f, color, draw->context );
+	draw->DrawSegmentFcn( pA, b3OffsetPos( pA, b3MulSV( 0.25f * scale, joint->normal ) ), b3_colorOrange, draw->context );
+
+	if ( draw->drawJointExtras )
+	{
+		char buffer[96];
+		snprintf( buffer, 96, "length = %.3f, rest = %.3f, f = %.1f, v = %.3f", length, joint->restLength, force,
+				  joint->velocity );
+		draw->DrawStringFcn( pB, buffer, color, draw->context );
 	}
 }

@@ -1193,7 +1193,7 @@ public:
 
 			// Debris doesn't collide with the mover or other debris.
 			boxShapeDef.filter.categoryBits = DebrisBit;
-			boxShapeDef.filter.maskBits = DynamicBit | StaticBit;
+			boxShapeDef.filter.maskBits = DebrisBit | ProjectileBit | DynamicBit | StaticBit;
 			boxShapeDef.density = 100.0f;
 			boxShapeDef.explosionScale = 0.05f;
 
@@ -1298,6 +1298,7 @@ public:
 			b3CreateRevoluteJoint( m_worldId, &jointDef );
 		}
 
+		// Jump puzzle
 		for ( int i = 0; i < m_pillarCount; ++i )
 		{
 			b3Pos top = GetPillarTop( i );
@@ -1338,9 +1339,6 @@ public:
 		m_launcherHull = b3CreateCylinder( launcherLength, m_launcherRadius, -m_launcherBack, 5 );
 		m_launcherMesh = FindOrAddHull( m_launcherHull );
 		m_time = 0.0f;
-		m_lapTime = 0.0f;
-		m_bestLapTime = 0.0f;
-		m_lapCount = 0;
 	}
 
 	~DynamicMoverSample() override
@@ -1425,8 +1423,6 @@ public:
 			m_gemIds[i] = b3CreateBody( m_worldId, &bodyDef );
 			b3CreateHullShape( m_gemIds[i], &shapeDef, &gem.base );
 		}
-
-		m_gemsLeft = m_gemCount;
 	}
 
 	void UpdatePressurePlate()
@@ -1476,22 +1472,9 @@ public:
 				{
 					b3DestroyBody( id );
 					id = b3_nullBodyId;
-					m_gemsLeft -= 1;
 					break;
 				}
 			}
-		}
-
-		if ( m_gemsLeft == 0 )
-		{
-			m_lapCount += 1;
-			if ( m_bestLapTime == 0.0f || m_lapTime < m_bestLapTime )
-			{
-				m_bestLapTime = m_lapTime;
-			}
-
-			m_lapTime = 0.0f;
-			SpawnGems();
 		}
 	}
 
@@ -1515,15 +1498,13 @@ public:
 		{
 			float r = capsule.radius;
 			float hy = 0.5f * b3Length( capsule.center2 - capsule.center1 ) + r;
-			b3BoxHull box =
-				b3MakeOffsetBoxHull( r, hy, r, b3Lerp( capsule.center1, capsule.center2, 0.5f ) );
+			b3Vec3 c = b3Lerp( capsule.center1, capsule.center2, 0.5f );
+			b3BoxHull box = b3MakeOffsetBoxHull( r, hy, r, c );
 			shapeDef.density = density;
 			b3CreateHullShape( bodyId, &shapeDef, &box.base );
 		}
 		else
 		{
-			float r = capsule.radius;
-			float h = b3Length( capsule.center2 - capsule.center1 );
 			shapeDef.density = density;
 			b3CreateCapsuleShape( bodyId, &shapeDef, &capsule );
 		}
@@ -1536,19 +1517,17 @@ public:
 		b3Vec3 direction;
 		b3Vec3 right;
 		b3Vec3 velocity;
-		b3Pos impact;
-		float flightTime;
-		bool hit;
 	};
 
 	Aim ComputeAim() const
 	{
-		Aim aim = {};
 		const b3Capsule& capsule = m_mover.m_capsule;
 
 		b3Vec3 right = m_camera->GetRight();
 		right.y = 0.0f;
 		right = b3Normalize( right );
+
+		Aim aim = {};
 		aim.right = right;
 
 		b3Vec3 shoulderOffset = capsule.center2 + ( capsule.radius + m_launcherRadius ) * right;
@@ -1556,28 +1535,6 @@ public:
 		aim.direction = -m_camera->GetForward();
 		aim.muzzle = aim.shoulder + ( m_launcherFront + m_launcherRadius ) * aim.direction;
 		aim.velocity = m_ballSpeed * aim.direction;
-
-		b3Vec3 gravity = b3World_GetGravity( m_worldId );
-		b3QueryFilter filter = { ProjectileBit, AllBits & ~MoverBit, 0, "aim" };
-		float maxTime = 3.0f;
-		float dt = 1.0f / 30.0f;
-		b3Pos p1 = aim.muzzle;
-		aim.flightTime = maxTime;
-		for ( float t = dt; t <= maxTime; t += dt )
-		{
-			b3Pos p2 = aim.muzzle + t * aim.velocity + ( 0.5f * t * t ) * gravity;
-			b3RayResult result =
-				b3World_CastRayClosest( m_worldId, p1, b3SubPos( p2, p1 ), filter );
-			if ( result.hit )
-			{
-				aim.impact = result.point;
-				aim.flightTime = t - dt + result.fraction * dt;
-				aim.hit = true;
-				break;
-			}
-
-			p1 = p2;
-		}
 
 		return aim;
 	}
@@ -1590,8 +1547,7 @@ public:
 			b3DestroyBody( ballId );
 		}
 
-		// Back up by the travel of the coming step so the first drawn frame is at the tip. Capped
-		// at the shoulder so a fast ball never starts behind the mover.
+		// Back up the spawn point so we see it drawn at the muzzle.
 		float backDistance =
 			b3MinFloat( m_ballSpeed * leadTime, m_launcherFront + m_launcherRadius );
 
@@ -1599,6 +1555,8 @@ public:
 		bodyDef.type = b3_dynamicBody;
 		bodyDef.position = aim.muzzle - backDistance * aim.direction;
 		bodyDef.linearVelocity = aim.velocity;
+
+		// This is good use case for the bullet setting because this is a fast projectile.
 		bodyDef.isBullet = true;
 		bodyDef.name = "ball";
 		ballId = b3CreateBody( m_worldId, &bodyDef );
@@ -1616,10 +1574,9 @@ public:
 		m_ballIndex = ( m_ballIndex + 1 ) % m_ballCapacity;
 	}
 
-	void DrawAim( const Aim& aim ) const
+	void DrawWeapon( const Aim& aim ) const
 	{
-		// The cylinder axis is local y. Rolling with the camera right keeps the flats steady as the
-		// view turns.
+		// The cylinder axis is local y. Roll with the camera to keep it steady.
 		b3Matrix3 basis = { aim.right, aim.direction, b3Cross( aim.right, aim.direction ) };
 		b3WorldTransform launcherTransform = { aim.shoulder, b3MakeQuatFromMatrix( &basis ) };
 		b3Transform relative = b3ToRelativeTransform( launcherTransform, GetDrawOrigin() );
@@ -1752,7 +1709,7 @@ public:
 
 		ImGui::Separator();
 
-		ImGui::SliderFloat( "Ball Speed", &m_ballSpeed, 5.0f, 60.0f, "%.0f" );
+		ImGui::SliderFloat( "Ball Speed", &m_ballSpeed, 10.0f, 200.0f, "%.0f" );
 
 		return true;
 	}
@@ -1765,7 +1722,6 @@ public:
 		if ( pause == false && timeStep > 0.0f )
 		{
 			m_time += timeStep;
-			m_lapTime += timeStep;
 
 			for ( int i = 0; i < m_platformCount; ++i )
 			{
@@ -1829,18 +1785,11 @@ public:
 		if ( m_aiming )
 		{
 			Aim aim = ComputeAim();
-			DrawAim( aim );
+			DrawWeapon( aim );
 		}
 
 		DrawTextLine( "WASD = move, Space = jump, Shift = sprint, Ctrl = walk" );
 		DrawTextLine( "T = camera, RMB = aim, LMB = shoot" );
-		DrawTextLine( "gems %d / %d, lap time %.1f s", m_gemCount - m_gemsLeft, m_gemCount,
-					  m_lapTime );
-
-		if ( m_lapCount > 0 )
-		{
-			DrawTextLine( "laps %d, best %.1f s", m_lapCount, m_bestLapTime );
-		}
 
 		float normalY = m_mover.m_castResult.hit ? m_mover.m_castResult.normal.y : 0.0f;
 		DrawTextLine( "on ground %d, walkable %d, normal y %.2f", (int)m_mover.m_onGround,
@@ -1881,11 +1830,7 @@ public:
 	bool m_plateArmed;
 	b3BodyId m_platformIds[m_platformCount];
 	b3BodyId m_gemIds[m_gemCount];
-	int m_gemsLeft;
-	int m_lapCount;
 	float m_time;
-	float m_lapTime;
-	float m_bestLapTime;
 	bool m_jumpReleased;
 	bool m_drawProbes;
 	bool m_useBox;

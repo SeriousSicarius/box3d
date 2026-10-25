@@ -282,8 +282,8 @@ void b3SolvePogoJoint( b3JointSim* base, b3StepContext* context, bool useBias )
 	}
 }
 
-void b3DrawPogoJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base, b3WorldTransform transformA,
-					  b3WorldTransform transformB, float scale )
+void b3DrawPogoJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base,
+					  b3WorldTransform transformA, b3WorldTransform transformB, float scale )
 {
 	B3_ASSERT( base->type == b3_pogoJoint );
 
@@ -337,7 +337,7 @@ void b3DrawPogoJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base, b3Wor
 	{
 		float side = i == segmentCount ? 0.0f : ( i & 1 ) ? width : -width;
 		float t = (float)i / (float)segmentCount;
-		b3Pos p2 = b3OffsetPos( pB, b3MulAdd( b3MulSV( -t * length, axis ), side, perp1 ) );
+		b3Pos p2 = b3OffsetPos( pB, b3MulAdd( b3MulSV( -t * length, axis ), side, perp2 ) );
 		draw->DrawSegmentFcn( p1, p2, color, draw->context );
 		p1 = p2;
 	}
@@ -345,10 +345,12 @@ void b3DrawPogoJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base, b3Wor
 	// Ground plane
 	b3Pos rest = b3OffsetPos( pB, b3MulSV( -joint->restLength, axis ) );
 	float tick = 1.5f * width;
-	draw->DrawSegmentFcn( b3OffsetPos( rest, b3MulSV( -tick, perp1 ) ), b3OffsetPos( rest, b3MulSV( tick, perp1 ) ),
-						  b3_colorWhite, draw->context );
-	draw->DrawSegmentFcn( b3OffsetPos( rest, b3MulSV( -tick, perp2 ) ), b3OffsetPos( rest, b3MulSV( tick, perp2 ) ),
-						  b3_colorWhite, draw->context );
+	draw->DrawSegmentFcn( b3OffsetPos( rest, b3MulSV( -tick, perp1 ) ),
+						  b3OffsetPos( rest, b3MulSV( tick, perp1 ) ), b3_colorWhite,
+						  draw->context );
+	draw->DrawSegmentFcn( b3OffsetPos( rest, b3MulSV( -tick, perp2 ) ),
+						  b3OffsetPos( rest, b3MulSV( tick, perp2 ) ), b3_colorWhite,
+						  draw->context );
 
 	if ( b3Length( b3SubPos( pA, foot ) ) > B3_LINEAR_SLOP )
 	{
@@ -356,13 +358,14 @@ void b3DrawPogoJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base, b3Wor
 	}
 
 	draw->DrawPointFcn( pA, 6.0f, color, draw->context );
-	draw->DrawSegmentFcn( pA, b3OffsetPos( pA, b3MulSV( 0.25f * scale, joint->normal ) ), b3_colorOrange, draw->context );
+	draw->DrawSegmentFcn( pA, b3OffsetPos( pA, b3MulSV( 0.5f * scale, joint->normal ) ),
+						  b3_colorOrange, draw->context );
 
 	if ( draw->drawJointExtras )
 	{
 		char buffer[96];
-		snprintf( buffer, 96, "length = %.3f, rest = %.3f, f = %.1f, v = %.3f", length, joint->restLength, force,
-				  joint->velocity );
+		snprintf( buffer, 96, "length = %.3f, rest = %.3f, f = %.1f, v = %.3f", length,
+				  joint->restLength, force, joint->velocity );
 		draw->DrawStringFcn( pB, buffer, color, draw->context );
 	}
 }

@@ -144,6 +144,8 @@ public:
 	DynamicMoverCastResult m_castResult;
 
 	b3Vec3 m_velocity;
+	float m_timeSliding;
+	float m_slideDuration;
 	bool m_onGround;
 	bool m_walkable;
 	bool m_jumping;

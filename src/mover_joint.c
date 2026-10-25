@@ -205,8 +205,32 @@ static b3HexColor b3LerpColor( b3HexColor a, b3HexColor b, float t )
 	return (b3HexColor)result;
 }
 
-void b3DrawMoverJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base, b3WorldTransform transformA,
-					   b3WorldTransform transformB )
+static void b3DrawArrow( b3DebugDraw* draw, b3Pos a, b3Pos b, b3Pos planeNormal, float size,
+						 b3HexColor color )
+{
+	draw->DrawSegmentFcn( a, b, color, draw->context );
+
+	b3Vec3 shaft = b3Sub( b, a );
+	float shaftLen = b3Length( shaft );
+	if ( shaftLen < 1e-6f )
+	{
+		return;
+	}
+
+	b3Vec3 dir = { shaft.x / shaftLen, shaft.y / shaftLen, shaft.z / shaftLen };
+	float headLen = size;
+
+	b3Vec3 perp = b3Normalize( b3Cross( planeNormal, dir ) );
+	b3Vec3 backFromTip = b3MulSV( -headLen, dir );
+	b3Vec3 sideStep = b3MulSV( headLen * 0.5f, perp );
+	b3Vec3 tip1 = b3Add( b, b3Add( backFromTip, sideStep ) );
+	b3Vec3 tip2 = b3Add( b, b3Sub( backFromTip, sideStep ) );
+	draw->DrawSegmentFcn( b, tip1, color, draw->context );
+	draw->DrawSegmentFcn( b, tip2, color, draw->context );
+}
+
+void b3DrawMoverJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base,
+					   b3WorldTransform transformA, b3WorldTransform transformB )
 {
 	B3_ASSERT( base->type == b3_moverJoint );
 	B3_UNUSED( transformA );
@@ -227,30 +251,39 @@ void b3DrawMoverJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base, b3Wo
 
 	b3Vec3 error = b3Sub( b3Sub( vB, vA ), joint->linearVelocity );
 	b3Vec2 planeError = { b3Dot( error, axisX ), b3Dot( error, axisZ ) };
-	b3Vec2 planeTarget = { b3Dot( joint->linearVelocity, axisX ), b3Dot( joint->linearVelocity, axisZ ) };
+	b3Vec2 planeTarget = { b3Dot( joint->linearVelocity, axisX ),
+						   b3Dot( joint->linearVelocity, axisZ ) };
 
 	// Colorize ring by ratio of actual speed to target speed.
 	float referenceSpeed = b3MaxFloat( b3Length2( planeTarget ), 1.0f );
 	float t = b3ClampFloat( b3Length2( planeError ) / referenceSpeed, 0.0f, 1.0f );
-	b3HexColor color = b3LerpColor( b3_colorLimeGreen, b3_colorRed, t );
+	b3HexColor color = b3LerpColor( b3_colorWhite, b3_colorBlue, t );
 
+	float radius = draw->jointScale;
+	b3Vec3 rx = b3MulSV( radius, axisX );
+	b3Vec3 rz = b3MulSV( radius, axisZ );
 	const int segmentCount = 32;
-	b3Pos p1 = b3OffsetPos( frameB.p, axisX );
-	for ( int i = 1; i <= segmentCount; ++i )
+	b3CosSin cs = b3ComputeCosSin( 2.0f * B3_PI / segmentCount );
+	float x1 = 1.0f, y1 = 0.0f;
+	b3Pos p1 = b3OffsetPos( frameB.p, rx );
+	for ( int i = 0; i < segmentCount; ++i )
 	{
-		float angle = 2.0f * B3_PI * i / segmentCount;
-		b3CosSin cs = b3ComputeCosSin( angle );
-		b3Pos p2 = b3OffsetPos( frameB.p, b3Blend2( cs.cosine, axisX, cs.sine, axisZ ) );
+		float x2 = cs.cosine * x1 - cs.sine * y1;
+		float y2 = cs.sine * x1 + cs.cosine * y1;
+		b3Pos p2 = b3OffsetPos( frameB.p, b3Blend2( x2, rx, y2, rz ) );
 		draw->DrawSegmentFcn( p1, p2, color, draw->context );
+		x1 = x2;
+		y1 = y2;
 		p1 = p2;
 	}
 
 	if ( joint->maxForce > 0.0f )
 	{
+		b3Vec3 force = b3Blend2( joint->impulse.x, rx, joint->impulse.y, rz );
+		b3Vec3 dir = b3Normalize( force );
+		b3Pos origin = b3OffsetPos( frameB.p, b3MulSV( -radius, dir ) );
 		float scale = world->inv_h / joint->maxForce;
-		b3Vec3 force = b3Blend2( scale * joint->impulse.x, axisX, scale * joint->impulse.y, axisZ );
-		b3Pos tip = b3OffsetPos( frameB.p, force );
-		draw->DrawSegmentFcn( frameB.p, tip, b3_colorAzure, draw->context );
-		draw->DrawPointFcn( tip, 6.0f, b3_colorAzure, draw->context );
+		b3Pos tip = b3OffsetPos( origin, b3MulSV( scale, force ) );
+		b3DrawArrow( draw, origin, tip, matrixB.cy, 0.1f * draw->jointScale, b3_colorWhite );
 	}
 }

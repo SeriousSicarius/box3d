@@ -946,9 +946,20 @@ public:
 			b3CreateRevoluteJoint( m_worldId, &jointDef );
 		}
 
-		// Ramps
+		// Ramp to bridge.
 		AddRamp( { 6.0f, 2.0f, 9.0f }, { 6.0f, 0.0f, 3.5f }, 1.5f, b3_colorOliveDrab );
-		AddRamp( { 12.0f, 3.0f, -12.0f }, { 12.0f, 0.0f, -9.5f }, 3.5f, b3_colorIndianRed );
+
+		// Wall
+		AddRamp( { 20.0f, 3.0f, -40.0f }, { 20.0f, -0.5f, -40.0f }, 5.0f, b3_colorLightSteelBlue );
+
+		// Ramp
+		AddRamp( { 35.0f, 3.0f, -46.0f }, { 35.0f, -0.5f, -39.5f }, 5.0f, b3_colorLightSteelBlue );
+
+		// Steep
+		AddRamp( { 50.0f, 3.0f, -42.5f }, { 50.0f, -0.5f, -39.5f }, 5.0f, b3_colorLightSteelBlue );
+
+		// Curb
+		AddRamp( { 65.0f, 0.25f, -40.0f }, { 65.0f, -0.5f, -40.0f }, 5.0f, b3_colorLightSteelBlue );
 
 		// Ledges
 		for ( int i = 0; i < 2; ++i )
@@ -1795,6 +1806,8 @@ public:
 		DrawTextLine( "on ground %d, walkable %d, normal y %.2f", (int)m_mover.m_onGround,
 					  (int)m_mover.m_walkable, normalY );
 		DrawTextLine( "pogo length %.2f / %.2f", m_mover.m_pogoLength, m_mover.m_pogoRestLength );
+
+		DrawTextLine( "time sliding %.2f", m_mover.m_timeSliding );
 	}
 
 	static Sample* Create( SampleContext* context )

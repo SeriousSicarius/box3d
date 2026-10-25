@@ -76,6 +76,8 @@ DynamicMover::DynamicMover()
 	m_castResult = {};
 
 	m_velocity = b3Vec3_zero;
+	m_timeSliding = 0.0f;
+	m_slideDuration = 0.2f;
 	m_onGround = false;
 	m_walkable = false;
 	m_jumping = false;
@@ -332,16 +334,29 @@ void DynamicMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec2 
 
 	if ( m_castResult.hit )
 	{
+		// Is the ground too steep to walk?
+		m_walkable = m_castResult.normal.y >= m_minGroundNormalY;
+
 		// The cast can still hit while jumping.
 		m_onGround = m_jumping == false;
 
-		// Is the ground too steep to walk?
-		m_walkable = m_castResult.normal.y >= m_minGroundNormalY;
+		if ( m_onGround )
+		{
+			if ( m_walkable )
+			{
+				m_timeSliding = b3MaxFloat( m_timeSliding - timeStep, 0.0f );
+			}
+			else
+			{
+				m_timeSliding = b3MinFloat( m_timeSliding + timeStep, m_slideDuration );
+			}
+		}
 	}
 	else
 	{
 		m_onGround = false;
 		m_walkable = false;
+		m_timeSliding = b3MaxFloat( m_timeSliding - timeStep, 0.0f );
 	}
 
 	// Connect the mover joint to platform. Acts like friction.
@@ -388,7 +403,15 @@ void DynamicMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec2 
 	float maxForce;
 	if ( m_onGround )
 	{
-		maxForce = m_walkable ? m_maxGroundForce : 0.0f;
+		if ( m_slideDuration > 0.0f )
+		{
+			float scale = b3ClampFloat( 1.0f - m_timeSliding / m_slideDuration, 0.0f, 1.0f );
+			maxForce = scale * m_maxGroundForce;
+		}
+		else
+		{
+			maxForce = m_walkable ? m_maxGroundForce : 0.0f;
+		}
 	}
 	else
 	{

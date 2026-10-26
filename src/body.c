@@ -1315,10 +1315,10 @@ void b3Body_SetTargetTransform( b3BodyId bodyId, b3WorldTransform target, float 
 	float invTimeStep = 1.0f / timeStep;
 	b3Vec3 linearVelocity = b3MulSV( invTimeStep, b3SubPos( center2, center1 ) );
 
-	// Compute angular velocity:
-	// q' = 0.5 * w * q
-	// <~> ( q2 - q1 ) / dt =  0.5 * w * q1
-	// <=> w = 2 * ( q2 - q1 ) * Conjugate( q1 ) / dt
+	// Compute angular velocity: the rotation from q1 to q2 is q2 * Conjugate( q1 ), turning by angle
+	// 2 * atan2( |v|, s ) about v. The first order w = 2 * ( q2 - q1 ) * Conjugate( q1 ) / dt
+	// falls short as the turn grows (2 * sin( angle / 2 ) for angle), so a body led through a
+	// large turn in one step ended short of its target.
 	b3Quat q1 = sim->transform.q;
 	b3Quat q2 = target.q;
 
@@ -1328,9 +1328,19 @@ void b3Body_SetTargetTransform( b3BodyId bodyId, b3WorldTransform target, float 
 		q2 = b3NegateQuat( q2 );
 	}
 
-	b3Quat dq = { b3Sub( q2.v, q1.v ), q2.s - q1.s };
-	b3Quat omega = b3MulQuat( dq, b3Conjugate( q1 ) );
-	b3Vec3 angularVelocity = b3MulSV( 2.0f * invTimeStep, omega.v );
+	b3Quat turn = b3MulQuat( q2, b3Conjugate( q1 ) );
+	float sine = b3Length( turn.v );
+	b3Vec3 angularVelocity;
+	if ( sine > 1.0e-4f )
+	{
+		float angle = 2.0f * b3Atan2( sine, turn.s );
+		angularVelocity = b3MulSV( angle * invTimeStep / sine, turn.v );
+	}
+	else
+	{
+		// A turn this small is its first order.
+		angularVelocity = b3MulSV( 2.0f * invTimeStep, turn.v );
+	}
 
 	// Early out if the body is asleep already and the desired movement is small
 	if ( body->setIndex != b3_awakeSet )

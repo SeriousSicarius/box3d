@@ -521,12 +521,13 @@ void b3SolveSphericalJoint( b3JointSim* base, b3StepContext* context, bool useBi
 		// Solve spring
 		if ( joint->enableSpring )
 		{
-			// The target turns with its angular velocity, up to the end of this substep. Each substep
-			// solves once and relaxes once, and the relax pass counts the substep.
+			// The target turns with its angular velocity: compared with the pose at the substep's start
+			// in the solve, and at its end in the relax pass, after the positions moved. Each substep
+			// solves once and relaxes once; the relax pass counts it.
 			b3Quat targetRotation = joint->targetRotation;
 			if ( b3LengthSquared( joint->targetAngularVelocity ) > 0.0f )
 			{
-				float time = ( joint->springSubStep + 1 ) * context->h;
+				float time = ( joint->springSubStep + ( useBias ? 0 : 1 ) ) * context->h;
 				b3Quat turn = b3QuatFromExponentialMap( b3MulSV( time, joint->targetAngularVelocity ) );
 				targetRotation = b3NormalizeQuat( b3MulQuat( turn, targetRotation ) );
 			}

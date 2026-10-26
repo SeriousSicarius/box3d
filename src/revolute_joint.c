@@ -474,12 +474,19 @@ void b3SolveRevoluteJoint( b3JointSim* base, b3StepContext* context, bool useBia
 		// Solve spring
 		if ( joint->enableSpring )
 		{
-			// Get the substep relative rotation. The target moves at its speed, up to the end of this
-			// substep. Each substep solves once and relaxes once, and the relax pass counts the substep.
-			float time = ( joint->springSubStep + 1 ) * context->h;
+			// Get the substep relative rotation. The target moves at its speed: compared with the pose
+			// at the substep's start in the solve, and at its end in the relax pass, after the
+			// positions moved. Each substep solves once and relaxes once; the relax pass counts it.
+			float time = ( joint->springSubStep + ( useBias ? 0 : 1 ) ) * context->h;
 			float targetAngle = joint->targetAngle + joint->targetSpeed * time;
 			float angle = b3GetTwistAngle( relQ );
-			float c = b3UnwindAngle( angle - targetAngle );
+			float c = angle - targetAngle;
+			if ( joint->enableLimit == false )
+			{
+				// Free to turn either way round: the short way. A limited hinge keeps the way its
+				// limits allow.
+				c = b3UnwindAngle( c );
+			}
 
 			float bias = joint->springSoftness.biasRate * c;
 			float massScale = joint->springSoftness.massScale;

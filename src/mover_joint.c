@@ -242,17 +242,17 @@ void b3DrawMoverJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base,
 	b3Vec3 vA = stateA != NULL ? stateA->linearVelocity : b3Vec3_zero;
 	b3Vec3 vB = stateB != NULL ? stateB->linearVelocity : b3Vec3_zero;
 
-	b3Vec3 relativeVelocity = b3Sub( vB, vA );
-	b3Vec2 planarVelocity = { b3Dot( relativeVelocity, axisX ), b3Dot( relativeVelocity, axisZ ) };
+	b3Vec3 velocityError = b3Sub( b3Sub( vB, vA ), joint->linearVelocity );
+	b3Vec2 planarVelocityError = { b3Dot( velocityError, axisX ), b3Dot( velocityError, axisZ ) };
 	b3Vec2 targetVelocity = { b3Dot( joint->linearVelocity, axisX ),
-						   b3Dot( joint->linearVelocity, axisZ ) };
+							  b3Dot( joint->linearVelocity, axisZ ) };
 
-	// Colorize ring by ratio of actual speed to target speed.
+	// Colorize ring by ratio of velocity error magnitude to target speed.
 	b3HexColor color = b3_colorWhite;
 	float targetSpeed = b3Length2( targetVelocity );
-	if (targetSpeed > 0.0f)
+	if ( targetSpeed > 0.0f )
 	{
-		float t = b3ClampFloat( b3Length2( planarVelocity ) / targetSpeed, 0.0f, 1.0f );
+		float t = b3ClampFloat( b3Length2( planarVelocityError ) / targetSpeed, 0.0f, 1.0f );
 		color = b3LerpColor( b3_colorWhite, b3_colorBlue, t );
 	}
 

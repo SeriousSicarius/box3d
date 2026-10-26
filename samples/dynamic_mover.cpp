@@ -373,9 +373,10 @@ void DynamicMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec2 
 	// The mover joint can be destroyed if attached to a platform that gets destroyed.
 	bool moverJointValid = b3Joint_IsValid( m_moverJointId );
 
-	if ( moverJointValid == false || B3_ID_EQUALS( b3Joint_GetBodyA( m_moverJointId ), baseId ) == false )
+	if ( moverJointValid == false ||
+		 B3_ID_EQUALS( b3Joint_GetBodyA( m_moverJointId ), baseId ) == false )
 	{
-		if (moverJointValid)
+		if ( moverJointValid )
 		{
 			b3DestroyJoint( m_moverJointId, false );
 		}
@@ -457,8 +458,10 @@ void DynamicMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec2 
 		m_velocity.z += accelSpeed * desiredDirection.z;
 	}
 
-	if ( m_castResult.hit == true )
+	if ( m_castResult.hit == true && b3IsNormalized( m_castResult.normal ) )
 	{
+		m_pogoLength = m_castResult.fraction * rayLength;
+
 		float moverMass = b3Body_GetMass( m_moverId );
 		float gravity = b3Length( b3World_GetGravity( m_worldId ) );
 		float moverWeight = m_gravityScale * gravity * moverMass;
@@ -471,7 +474,6 @@ void DynamicMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec2 
 		{
 			if ( pogoJointValid )
 			{
-				m_pogoLength = b3PogoJoint_GetCurrentLength( m_pogoJointId );
 				m_pogoImpulse = b3PogoJoint_GetImpulse( m_pogoJointId );
 				m_pogoVelocity = b3PogoJoint_GetCurrentSpeed( m_pogoJointId );
 
@@ -519,6 +521,12 @@ void DynamicMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec2 
 			localFrameA.p = b3Body_GetLocalPoint( m_surfaceBodyId, m_castResult.point );
 			localFrameA.q = b3Quat_identity;
 			b3Joint_SetLocalFrameA( m_pogoJointId, localFrameA );
+
+			b3Transform localFrameB;
+			localFrameB.p = m_capsule.center1 + pogoOffset;
+			localFrameB.q = b3Quat_identity;
+			b3Joint_SetLocalFrameB( m_pogoJointId, localFrameB );
+
 			b3PogoJoint_SetNormal( m_pogoJointId, m_castResult.normal );
 
 			if ( m_jumping )
@@ -550,6 +558,7 @@ void DynamicMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec2 
 		m_surfaceBodyId = b3_nullBodyId;
 		m_pogoImpulse = 0.0f;
 		m_pogoVelocity = 0.0f;
+		m_pogoLength = 0.0f;
 	}
 
 	b3MoverJoint_SetLinearVelocity( m_moverJointId, m_velocity );

@@ -868,6 +868,15 @@ typedef struct b3RevoluteJointDef
 	/// The spring damping ratio, non-dimensional.
 	float dampingRatio;
 
+	/// The maximum spring torque, typically in newton-meters. Non-negative number.
+	/// The default, FLT_MAX, is no limit.
+	float maxSpringTorque;
+
+	/// The target angle's speed in radians per second. Within a step the target moves at this speed
+	/// from targetAngle, t from the step's start, and the spring and the motor act relative to it.
+	/// The advance is not kept: set targetAngle each step.
+	float targetSpeed;
+
 	/// A flag to enable joint limits.
 	bool enableLimit;
 
@@ -911,6 +920,16 @@ typedef struct b3SphericalJointDef
 
 	/// Target spring rotation, joint frame B relative to joint frame A.
 	b3Quat targetRotation;
+
+	/// The maximum spring torque, typically in newton-meters. Non-negative number.
+	/// The default, FLT_MAX, is no limit.
+	float maxSpringTorque;
+
+	/// The target rotation's angular velocity, frame B relative to frame A, expressed in frame A
+	/// (radians per second). Within a step the target turns at this rate from targetRotation,
+	/// target(t) = exp(targetAngularVelocity * t) * targetRotation, t from the step's start, and the
+	/// spring and the motor act relative to it. The advance is not kept: set targetRotation each step.
+	b3Vec3 targetAngularVelocity;
 
 	/// A flag to enable the cone limit. The cone is centered on the frameA z-axis.
 	bool enableConeLimit;

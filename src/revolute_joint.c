@@ -169,6 +169,43 @@ float b3RevoluteJoint_GetSpringDampingRatio( b3JointId jointId )
 	return base->revoluteJoint.dampingRatio;
 }
 
+void b3RevoluteJoint_SetMaxSpringTorque( b3JointId jointId, float torque )
+{
+	B3_ASSERT( b3IsValidFloat( torque ) && torque >= 0.0f );
+	b3World* world = b3GetWorld( jointId.world0 );
+	B3_REC( world, RevoluteJointSetMaxSpringTorque, jointId, torque );
+	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_revoluteJoint );
+	base->revoluteJoint.maxSpringTorque = torque;
+}
+
+float b3RevoluteJoint_GetMaxSpringTorque( b3JointId jointId )
+{
+	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_revoluteJoint );
+	return base->revoluteJoint.maxSpringTorque;
+}
+
+void b3RevoluteJoint_SetTargetSpeed( b3JointId jointId, float speed )
+{
+	B3_ASSERT( b3IsValidFloat( speed ) );
+	b3World* world = b3GetWorld( jointId.world0 );
+	B3_REC( world, RevoluteJointSetTargetSpeed, jointId, speed );
+	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_revoluteJoint );
+	base->revoluteJoint.targetSpeed = speed;
+}
+
+float b3RevoluteJoint_GetTargetSpeed( b3JointId jointId )
+{
+	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_revoluteJoint );
+	return base->revoluteJoint.targetSpeed;
+}
+
+float b3RevoluteJoint_GetSpringTorque( b3JointId jointId )
+{
+	b3World* world = b3GetWorld( jointId.world0 );
+	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_revoluteJoint );
+	return world->inv_dt * base->revoluteJoint.springImpulseSum;
+}
+
 void b3RevoluteJoint_EnableMotor( b3JointId jointId, bool enableMotor )
 {
 	b3World* world = b3GetWorld( jointId.world0 );
@@ -329,6 +366,20 @@ void b3PrepareRevoluteJoint( b3JointSim* base, b3StepContext* context )
 		joint->lowerImpulse = 0.0f;
 		joint->upperImpulse = 0.0f;
 	}
+
+	// A spring at zero hertz solves to no change, so warm starting would keep applying its last
+	// impulse: it applies nothing instead.
+	if ( joint->hertz == 0.0f )
+	{
+		joint->springImpulse = 0.0f;
+	}
+
+	// A lowered torque cap holds from this step's warm start on.
+	float maxSpringImpulse = joint->maxSpringTorque * context->h;
+	joint->springImpulse = b3ClampFloat( joint->springImpulse, -maxSpringImpulse, maxSpringImpulse );
+
+	joint->springImpulseSum = 0.0f;
+	joint->springSubStep = 0;
 }
 
 void b3WarmStartRevoluteJoint( b3JointSim* base, b3StepContext* context )
@@ -423,25 +474,36 @@ void b3SolveRevoluteJoint( b3JointSim* base, b3StepContext* context, bool useBia
 		// Solve spring
 		if ( joint->enableSpring )
 		{
-			// Get the substep relative rotation
-			float targetAngle = joint->targetAngle;
+			// Get the substep relative rotation. The target moves at its speed, up to the end of this
+			// substep. Each substep solves once and relaxes once, and the relax pass counts the substep.
+			float time = ( joint->springSubStep + 1 ) * context->h;
+			float targetAngle = joint->targetAngle + joint->targetSpeed * time;
 			float angle = b3GetTwistAngle( relQ );
-			float c = angle - targetAngle;
+			float c = b3UnwindAngle( angle - targetAngle );
 
 			float bias = joint->springSoftness.biasRate * c;
 			float massScale = joint->springSoftness.massScale;
 			float impulseScale = joint->springSoftness.impulseScale;
 
-			float deltaImpulse = -massScale * joint->axialMass * ( axialCdot + bias ) - impulseScale * joint->springImpulse;
-			joint->springImpulse += deltaImpulse;
+			float oldImpulse = joint->springImpulse;
+			float deltaImpulse = -massScale * joint->axialMass * ( axialCdot - joint->targetSpeed + bias ) - impulseScale * oldImpulse;
+			float maxImpulse = joint->maxSpringTorque * context->h;
+			joint->springImpulse = b3ClampFloat( oldImpulse + deltaImpulse, -maxImpulse, maxImpulse );
+			deltaImpulse = joint->springImpulse - oldImpulse;
 
 			axialCdot += k * deltaImpulse;
 			axialImpulse += deltaImpulse;
+
+			if ( useBias == false )
+			{
+				joint->springImpulseSum += joint->springImpulse;
+				joint->springSubStep += 1;
+			}
 		}
 
 		if ( joint->enableMotor )
 		{
-			float cdot = axialCdot - joint->motorSpeed;
+			float cdot = axialCdot - ( joint->motorSpeed + joint->targetSpeed );
 			float oldImpulse = joint->motorImpulse;
 			float maxImpulse = joint->maxMotorTorque * context->h;
 			float deltaImpulse = b3ClampFloat( -joint->axialMass * cdot, -maxImpulse - oldImpulse, maxImpulse - oldImpulse );

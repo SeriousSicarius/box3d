@@ -196,6 +196,43 @@ float b3SphericalJoint_GetSpringDampingRatio( b3JointId jointId )
 	return base->sphericalJoint.dampingRatio;
 }
 
+void b3SphericalJoint_SetMaxSpringTorque( b3JointId jointId, float torque )
+{
+	B3_ASSERT( b3IsValidFloat( torque ) && torque >= 0.0f );
+	b3World* world = b3GetWorld( jointId.world0 );
+	B3_REC( world, SphericalJointSetMaxSpringTorque, jointId, torque );
+	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_sphericalJoint );
+	base->sphericalJoint.maxSpringTorque = torque;
+}
+
+float b3SphericalJoint_GetMaxSpringTorque( b3JointId jointId )
+{
+	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_sphericalJoint );
+	return base->sphericalJoint.maxSpringTorque;
+}
+
+void b3SphericalJoint_SetTargetAngularVelocity( b3JointId jointId, b3Vec3 angularVelocity )
+{
+	B3_ASSERT( b3IsValidVec3( angularVelocity ) );
+	b3World* world = b3GetWorld( jointId.world0 );
+	B3_REC( world, SphericalJointSetTargetAngularVelocity, jointId, angularVelocity );
+	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_sphericalJoint );
+	base->sphericalJoint.targetAngularVelocity = angularVelocity;
+}
+
+b3Vec3 b3SphericalJoint_GetTargetAngularVelocity( b3JointId jointId )
+{
+	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_sphericalJoint );
+	return base->sphericalJoint.targetAngularVelocity;
+}
+
+b3Vec3 b3SphericalJoint_GetSpringTorque( b3JointId jointId )
+{
+	b3World* world = b3GetWorld( jointId.world0 );
+	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_sphericalJoint );
+	return b3MulSV( world->inv_dt, base->sphericalJoint.springImpulseSum );
+}
+
 void b3SphericalJoint_EnableMotor( b3JointId jointId, bool enableMotor )
 {
 	b3World* world = b3GetWorld( jointId.world0 );
@@ -379,6 +416,23 @@ void b3PrepareSphericalJoint( b3JointSim* base, b3StepContext* context )
 		joint->lowerTwistImpulse = 0.0f;
 		joint->upperTwistImpulse = 0.0f;
 	}
+
+	// A spring at zero hertz solves to no change, so warm starting would keep applying its last
+	// impulse: it applies nothing instead.
+	if ( joint->hertz == 0.0f )
+	{
+		joint->springImpulse = b3Vec3_zero;
+	}
+
+	// A lowered torque cap holds from this step's warm start on.
+	float maxSpringImpulse = joint->maxSpringTorque * context->h;
+	if ( b3LengthSquared( joint->springImpulse ) > maxSpringImpulse * maxSpringImpulse )
+	{
+		joint->springImpulse = b3MulSV( maxSpringImpulse, b3Normalize( joint->springImpulse ) );
+	}
+
+	joint->springImpulseSum = b3Vec3_zero;
+	joint->springSubStep = 0;
 }
 
 void b3WarmStartSphericalJoint( b3JointSim* base, b3StepContext* context )
@@ -461,29 +515,58 @@ void b3SolveSphericalJoint( b3JointSim* base, b3StepContext* context, bool useBi
 		b3Vec3 cdot = b3Sub( wB, wA );
 		b3Vec3 angularImpulse = b3Vec3_zero;
 
+		// The target's angular velocity in world space, which the spring and the motor act relative to
+		b3Vec3 targetVelocity = b3RotateVector( quatA, joint->targetAngularVelocity );
+
 		// Solve spring
 		if ( joint->enableSpring )
 		{
+			// The target turns with its angular velocity, up to the end of this substep. Each substep
+			// solves once and relaxes once, and the relax pass counts the substep.
+			b3Quat targetRotation = joint->targetRotation;
+			if ( b3LengthSquared( joint->targetAngularVelocity ) > 0.0f )
+			{
+				float time = ( joint->springSubStep + 1 ) * context->h;
+				b3Quat turn = b3QuatFromExponentialMap( b3MulSV( time, joint->targetAngularVelocity ) );
+				targetRotation = b3NormalizeQuat( b3MulQuat( turn, targetRotation ) );
+			}
+
 			// Rotation constraint error
-			b3Vec3 deltaRotation = b3DeltaQuatToRotation( relQ, joint->targetRotation );
+			b3Vec3 deltaRotation = b3DeltaQuatToRotation( relQ, targetRotation );
 			b3Vec3 c = b3Neg( b3RotateVector( quatA, deltaRotation ) );
 
 			b3Vec3 bias = b3MulSV( joint->springSoftness.biasRate, c );
 			float massScale = joint->springSoftness.massScale;
 			float impulseScale = joint->springSoftness.impulseScale;
 
-			b3Vec3 impulse = b3MulSub( b3MulSV( -massScale, b3MulMV( joint->rotationMass, b3Add( cdot, bias ) ) ),
-									   impulseScale, joint->springImpulse );
-			joint->springImpulse = b3Add( joint->springImpulse, impulse );
+			b3Vec3 oldImpulse = joint->springImpulse;
+			b3Vec3 impulse =
+				b3MulSub( b3MulSV( -massScale, b3MulMV( joint->rotationMass, b3Add( b3Sub( cdot, targetVelocity ), bias ) ) ),
+						  impulseScale, oldImpulse );
+			b3Vec3 newImpulse = b3Add( oldImpulse, impulse );
+			float maxImpulse = joint->maxSpringTorque * context->h;
+			if ( b3LengthSquared( newImpulse ) > maxImpulse * maxImpulse )
+			{
+				newImpulse = b3MulSV( maxImpulse, b3Normalize( newImpulse ) );
+			}
+			impulse = b3Sub( newImpulse, oldImpulse );
+			joint->springImpulse = newImpulse;
 
 			cdot = b3Add( cdot, b3MulMV( invInertiaSum, impulse ) );
 			angularImpulse = b3Add( angularImpulse, impulse );
+
+			if ( useBias == false )
+			{
+				joint->springImpulseSum = b3Add( joint->springImpulseSum, joint->springImpulse );
+				joint->springSubStep += 1;
+			}
 		}
 
 		if ( joint->enableMotor )
 		{
 			// todo it might be more accurate to have the motor velocity in frameA due to sub-stepping.
-			b3Vec3 lambda = b3Neg( b3MulMV( joint->rotationMass, b3Sub( cdot, joint->motorVelocity ) ) );
+			b3Vec3 motorVelocity = b3Add( joint->motorVelocity, targetVelocity );
+			b3Vec3 lambda = b3Neg( b3MulMV( joint->rotationMass, b3Sub( cdot, motorVelocity ) ) );
 			b3Vec3 newImpulse = b3Add( joint->motorImpulse, lambda );
 			float length = b3Length( newImpulse );
 			float maxImpulse = joint->maxMotorTorque * context->h;

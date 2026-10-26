@@ -80,6 +80,7 @@ b3RevoluteJointDef b3DefaultRevoluteJointDef( void )
 {
 	b3RevoluteJointDef def = { 0 };
 	def.base = b3DefaultJointDef();
+	def.maxSpringTorque = FLT_MAX;
 	return def;
 }
 
@@ -88,6 +89,7 @@ b3SphericalJointDef b3DefaultSphericalJointDef( void )
 	b3SphericalJointDef def = { 0 };
 	def.base = b3DefaultJointDef();
 	def.targetRotation = b3Quat_identity;
+	def.maxSpringTorque = FLT_MAX;
 	return def;
 }
 
@@ -612,6 +614,10 @@ b3JointId b3CreateRevoluteJoint( b3WorldId worldId, const b3RevoluteJointDef* de
 	joint->revoluteJoint.lowerAngle = b3ClampFloat( lowerAngle, -0.99f * B3_PI, 0.99f * B3_PI );
 	joint->revoluteJoint.upperAngle = b3ClampFloat( upperAngle, -0.99f * B3_PI, 0.99f * B3_PI );
 
+	B3_ASSERT( b3IsValidFloat( def->maxSpringTorque ) && def->maxSpringTorque >= 0.0f );
+	B3_ASSERT( b3IsValidFloat( def->targetSpeed ) );
+	joint->revoluteJoint.maxSpringTorque = def->maxSpringTorque;
+	joint->revoluteJoint.targetSpeed = def->targetSpeed;
 	joint->revoluteJoint.maxMotorTorque = def->maxMotorTorque;
 	joint->revoluteJoint.motorSpeed = def->motorSpeed;
 	joint->revoluteJoint.enableSpring = def->enableSpring;
@@ -650,6 +656,10 @@ b3JointId b3CreateSphericalJoint( b3WorldId worldId, const b3SphericalJointDef* 
 	joint->sphericalJoint.lowerTwistAngle = b3ClampFloat( lowerAngle, -0.99f * B3_PI, 0.99f * B3_PI );
 	joint->sphericalJoint.upperTwistAngle = b3ClampFloat( upperAngle, -0.99f * B3_PI, 0.99f * B3_PI );
 
+	B3_ASSERT( b3IsValidFloat( def->maxSpringTorque ) && def->maxSpringTorque >= 0.0f );
+	B3_ASSERT( b3IsValidVec3( def->targetAngularVelocity ) );
+	joint->sphericalJoint.maxSpringTorque = def->maxSpringTorque;
+	joint->sphericalJoint.targetAngularVelocity = def->targetAngularVelocity;
 	joint->sphericalJoint.maxMotorTorque = def->maxMotorTorque;
 	joint->sphericalJoint.motorVelocity = def->motorVelocity;
 	joint->sphericalJoint.enableSpring = def->enableSpring;

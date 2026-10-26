@@ -186,6 +186,12 @@ typedef struct b3RevoluteJoint
 	float targetAngle;
 	float lowerAngle;
 	float upperAngle;
+	float maxSpringTorque;
+	float targetSpeed;
+
+	// The spring impulse summed over the step's substeps, and the substeps solved so far.
+	float springImpulseSum;
+	int springSubStep;
 
 	int indexA;
 	int indexB;
@@ -220,6 +226,12 @@ typedef struct b3SphericalJoint
 	float upperTwistAngle;
 	float coneAngle;
 	b3Quat targetRotation;
+	float maxSpringTorque;
+	b3Vec3 targetAngularVelocity;
+
+	// The spring impulse summed over the step's substeps, and the substeps solved so far.
+	b3Vec3 springImpulseSum;
+	int springSubStep;
 
 	int indexA;
 	int indexB;

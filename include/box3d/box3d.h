@@ -1486,6 +1486,22 @@ B3_API void b3RevoluteJoint_SetSpringDampingRatio( b3JointId jointId, float damp
 /// Get the revolute joint spring damping ratio, non-dimensional
 B3_API float b3RevoluteJoint_GetSpringDampingRatio( b3JointId jointId );
 
+/// Set the revolute joint maximum spring torque, typically in newton-meters (FLT_MAX: no limit)
+B3_API void b3RevoluteJoint_SetMaxSpringTorque( b3JointId jointId, float torque );
+
+/// Get the revolute joint maximum spring torque, typically in newton-meters
+B3_API float b3RevoluteJoint_GetMaxSpringTorque( b3JointId jointId );
+
+/// Set the revolute joint target angle's speed in radians per second. See b3RevoluteJointDef::targetSpeed.
+B3_API void b3RevoluteJoint_SetTargetSpeed( b3JointId jointId, float speed );
+
+/// Get the revolute joint target angle's speed in radians per second
+B3_API float b3RevoluteJoint_GetTargetSpeed( b3JointId jointId );
+
+/// Get the revolute joint spring torque about the hinge axis, typically in newton-meters: its mean
+/// over the last step, the spring alone.
+B3_API float b3RevoluteJoint_GetSpringTorque( b3JointId jointId );
+
 /// Set the revolute joint target angle in radians
 B3_API void b3RevoluteJoint_SetTargetAngle( b3JointId jointId, float targetRadians );
 
@@ -1596,6 +1612,23 @@ B3_API void b3SphericalJoint_SetSpringDampingRatio( b3JointId jointId, float dam
 
 /// Get the spherical joint spring damping ratio, non-dimensional
 B3_API float b3SphericalJoint_GetSpringDampingRatio( b3JointId jointId );
+
+/// Set the spherical joint maximum spring torque, typically in newton-meters (FLT_MAX: no limit)
+B3_API void b3SphericalJoint_SetMaxSpringTorque( b3JointId jointId, float torque );
+
+/// Get the spherical joint maximum spring torque, typically in newton-meters
+B3_API float b3SphericalJoint_GetMaxSpringTorque( b3JointId jointId );
+
+/// Set the spherical joint target rotation's angular velocity, frame B relative to frame A, in frame A
+/// (radians per second). See b3SphericalJointDef::targetAngularVelocity.
+B3_API void b3SphericalJoint_SetTargetAngularVelocity( b3JointId jointId, b3Vec3 angularVelocity );
+
+/// Get the spherical joint target rotation's angular velocity, in frame A (radians per second)
+B3_API b3Vec3 b3SphericalJoint_GetTargetAngularVelocity( b3JointId jointId );
+
+/// Get the spherical joint spring torque on body B in world space, typically in newton-meters: its
+/// mean over the last step, the spring alone.
+B3_API b3Vec3 b3SphericalJoint_GetSpringTorque( b3JointId jointId );
 
 /// Set the spherical joint spring target rotation
 B3_API void b3SphericalJoint_SetTargetRotation( b3JointId jointId, b3Quat targetRotation );

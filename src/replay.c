@@ -586,6 +586,8 @@ b3RevoluteJointDef b3RecR_REVOLUTEJOINTDEF( b3RecReader* rdr )
 	def.enableSpring = b3RecR_BOOL( rdr );
 	def.hertz = b3RecR_F32( rdr );
 	def.dampingRatio = b3RecR_F32( rdr );
+	def.maxSpringTorque = b3RecR_F32( rdr );
+	def.targetSpeed = b3RecR_F32( rdr );
 	def.enableLimit = b3RecR_BOOL( rdr );
 	def.lowerAngle = b3RecR_F32( rdr );
 	def.upperAngle = b3RecR_F32( rdr );
@@ -603,6 +605,8 @@ b3SphericalJointDef b3RecR_SPHERICALJOINTDEF( b3RecReader* rdr )
 	def.hertz = b3RecR_F32( rdr );
 	def.dampingRatio = b3RecR_F32( rdr );
 	def.targetRotation = b3RecR_QUAT( rdr );
+	def.maxSpringTorque = b3RecR_F32( rdr );
+	def.targetAngularVelocity = b3RecR_VEC3( rdr );
 	def.enableConeLimit = b3RecR_BOOL( rdr );
 	def.coneAngle = b3RecR_F32( rdr );
 	def.enableTwistLimit = b3RecR_BOOL( rdr );
@@ -1666,6 +1670,27 @@ static void b3RecDispatch_WheelJointSetTargetSteeringAngle( const b3RecArgs_Whee
 															b3RecReader* rdr )
 {
 	b3WheelJoint_SetTargetSteeringAngle( b3RecMakeJointId( rdr, a->joint ), a->radians );
+}
+
+static void b3RecDispatch_RevoluteJointSetMaxSpringTorque( const b3RecArgs_RevoluteJointSetMaxSpringTorque* a, b3RecReader* rdr )
+{
+	b3RevoluteJoint_SetMaxSpringTorque( b3RecMakeJointId( rdr, a->joint ), a->torque );
+}
+
+static void b3RecDispatch_RevoluteJointSetTargetSpeed( const b3RecArgs_RevoluteJointSetTargetSpeed* a, b3RecReader* rdr )
+{
+	b3RevoluteJoint_SetTargetSpeed( b3RecMakeJointId( rdr, a->joint ), a->speed );
+}
+
+static void b3RecDispatch_SphericalJointSetMaxSpringTorque( const b3RecArgs_SphericalJointSetMaxSpringTorque* a, b3RecReader* rdr )
+{
+	b3SphericalJoint_SetMaxSpringTorque( b3RecMakeJointId( rdr, a->joint ), a->torque );
+}
+
+static void b3RecDispatch_SphericalJointSetTargetAngularVelocity( const b3RecArgs_SphericalJointSetTargetAngularVelocity* a,
+																 b3RecReader* rdr )
+{
+	b3SphericalJoint_SetTargetAngularVelocity( b3RecMakeJointId( rdr, a->joint ), a->angularVelocity );
 }
 
 static void b3RecDispatch_StateHash( const b3RecArgs_StateHash* a, b3RecReader* rdr )

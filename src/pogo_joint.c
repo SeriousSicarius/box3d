@@ -179,6 +179,7 @@ void b3PreparePogoJoint( b3JointSim* base, b3StepContext* context )
 
 	if ( context->enableWarmStarting == false )
 	{
+		joint->velocity = 0.0f;
 		joint->impulse = 0.0f;
 	}
 }

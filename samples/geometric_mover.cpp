@@ -246,7 +246,7 @@ void GeometricMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec
 	float rayLength = m_pogoRestLength + m_capsule.radius;
 	b3Pos rayOrigin = m_position + m_capsule.center1;
 	b3Vec3 rayTranslation = -rayLength * b3Vec3_axisY;
-	b3QueryFilter pogoFilter = { 1, ~2u, 0, "pogo" };
+	b3QueryFilter pogoFilter = { 1, ~2ull, 0, "pogo" };
 	b3RayResult rayResult =
 		b3World_CastRayClosest( m_worldId, rayOrigin, rayTranslation, pogoFilter );
 

@@ -554,7 +554,7 @@ b3JointId b3CreateMoverJoint( b3WorldId worldId, const b3MoverJointDef* def )
 b3JointId b3CreatePogoJoint( b3WorldId worldId, const b3PogoJointDef* def )
 {
 	B3_CHECK_JOINT_DEF( def );
-	B3_ASSERT( b3IsValidVec3( def->normal ) );
+	B3_ASSERT( b3IsValidVec3( def->normal ) && b3IsNormalized( def->normal ) );
 	B3_ASSERT( b3IsValidFloat( def->restLength ) && def->restLength >= 0.0f );
 	B3_ASSERT( b3IsValidFloat( def->hertz ) && def->hertz >= 0.0f );
 	B3_ASSERT( b3IsValidFloat( def->dampingRatio ) && def->dampingRatio >= 0.0f );

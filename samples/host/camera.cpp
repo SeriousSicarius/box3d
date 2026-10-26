@@ -502,7 +502,6 @@ void Camera::Update( float dt, int width, int height )
 		if ( m_speedScrollAccum != 0.0f )
 		{
 			m_speed *= powf( 1.1f, m_speedScrollAccum );
-			//m_speed += m_speedScrollAccum;
 			m_speed = b3ClampFloat( m_speed, MIN_SPEED, MAX_SPEED );
 		}
 	}

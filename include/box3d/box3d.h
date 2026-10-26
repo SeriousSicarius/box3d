@@ -1418,6 +1418,18 @@ B3_API void b3PogoJoint_SetSpringDampingRatio( b3JointId jointId, float dampingR
 /// Get the spring damping ratio
 B3_API float b3PogoJoint_GetSpringDampingRatio( b3JointId jointId );
 
+/// Set the max tension force, usually in Newtons.
+B3_API void b3PogoJoint_SetMaxTensionForce( b3JointId jointId, float force );
+
+/// Get the max tension force, usually in Newtons.
+B3_API float b3PogoJoint_GetMaxTensionForce( b3JointId jointId );
+
+/// Set the max compression force, usually in Newtons.
+B3_API void b3PogoJoint_SetMaxCompressionForce( b3JointId jointId, float force );
+
+/// Get the max compression force, usually in Newtons.
+B3_API float b3PogoJoint_GetMaxCompressionForce( b3JointId jointId );
+
 /// Get the current length of the pogo.
 B3_API float b3PogoJoint_GetCurrentLength( b3JointId jointId );
 

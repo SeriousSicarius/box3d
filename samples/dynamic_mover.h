@@ -138,6 +138,7 @@ public:
 	b3WorldId m_worldId;
 	b3BodyId m_groundId;
 	b3BodyId m_moverId;
+	b3BodyId m_surfaceBodyId;
 	b3JointId m_moverJointId;
 	b3JointId m_pogoJointId;
 

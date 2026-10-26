@@ -60,6 +60,36 @@ float b3PogoJoint_GetSpringDampingRatio( b3JointId jointId )
 	return joint->pogoJoint.dampingRatio;
 }
 
+void b3PogoJoint_SetMaxTensionForce( b3JointId jointId, float force )
+{
+	B3_ASSERT( b3IsValidFloat( force ) && force >= 0.0f );
+	b3World* world = b3GetWorld( jointId.world0 );
+	B3_REC( world, PogoJointSetMaxTensionForce, jointId, force );
+	b3JointSim* joint = b3GetJointSimCheckType( jointId, b3_pogoJoint );
+	joint->pogoJoint.maxTensionForce = force;
+}
+
+float b3PogoJoint_GetMaxTensionForce(b3JointId jointId)
+{
+	b3JointSim* joint = b3GetJointSimCheckType( jointId, b3_pogoJoint );
+	return joint->pogoJoint.maxTensionForce;
+}
+
+void b3PogoJoint_SetMaxCompressionForce(b3JointId jointId, float force)
+{
+	B3_ASSERT( b3IsValidFloat( force ) && force >= 0.0f );
+	b3World* world = b3GetWorld( jointId.world0 );
+	B3_REC( world, PogoJointSetMaxCompressionForce, jointId, force );
+	b3JointSim* joint = b3GetJointSimCheckType( jointId, b3_pogoJoint );
+	joint->pogoJoint.maxCompressionForce = force;
+}
+
+float b3PogoJoint_GetMaxCompressionForce(b3JointId jointId)
+{
+	b3JointSim* joint = b3GetJointSimCheckType( jointId, b3_pogoJoint );
+	return joint->pogoJoint.maxCompressionForce;
+}
+
 float b3PogoJoint_GetCurrentLength( b3JointId jointId )
 {
 	b3World* world = b3GetWorld( jointId.world0 );

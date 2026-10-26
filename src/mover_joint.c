@@ -149,37 +149,30 @@ void b3SolveMoverJoint( b3JointSim* base, b3StepContext* context )
 	b3Vec3 vB = stateB->linearVelocity;
 
 	float maxForce = joint->maxForce;
-	if ( maxForce > 0.0f )
+	b3Vec3 vr = b3Sub( b3Sub( vB, vA ), joint->linearVelocity );
+	b3Vec2 cdot = { b3Dot( vr, joint->axisX ), b3Dot( vr, joint->axisZ ) };
+	b3Vec2 deltaImpulse = b3MulSV2( -joint->linearMass, cdot );
+	b3Vec2 newImpulse = {
+		joint->impulse.x + deltaImpulse.x,
+		joint->impulse.y + deltaImpulse.y,
+	};
+
+	float maxImpulse = context->h * maxForce;
+
+	float lengthSquared = b3Dot2( newImpulse, newImpulse );
+	if ( lengthSquared > maxImpulse * maxImpulse )
 	{
-		b3Vec3 vr = b3Sub( b3Sub( vB, vA ), joint->linearVelocity );
-		b3Vec2 cdot = { b3Dot( vr, joint->axisX ), b3Dot( vr, joint->axisZ ) };
-		b3Vec2 deltaImpulse = b3MulSV2( -joint->linearMass, cdot );
-		b3Vec2 newImpulse = {
-			joint->impulse.x + deltaImpulse.x,
-			joint->impulse.y + deltaImpulse.y,
-		};
-
-		float maxImpulse = context->h * maxForce;
-
-		float lengthSquared = b3Dot2( newImpulse, newImpulse );
-		if ( lengthSquared > maxImpulse * maxImpulse )
-		{
-			float scale = maxImpulse / sqrtf( lengthSquared );
-			newImpulse.x *= scale;
-			newImpulse.y *= scale;
-		}
-
-		deltaImpulse = b3Sub2( newImpulse, joint->impulse );
-		joint->impulse = newImpulse;
-
-		b3Vec3 P = b3Blend2( deltaImpulse.x, joint->axisX, deltaImpulse.y, joint->axisZ );
-		vA = b3MulSub( vA, mA, P );
-		vB = b3MulAdd( vB, mB, P );
+		float scale = maxImpulse / sqrtf( lengthSquared );
+		newImpulse.x *= scale;
+		newImpulse.y *= scale;
 	}
-	else
-	{
-		joint->impulse = (b3Vec2){ 0.0f, 0.0f };
-	}
+
+	deltaImpulse = b3Sub2( newImpulse, joint->impulse );
+	joint->impulse = newImpulse;
+
+	b3Vec3 P = b3Blend2( deltaImpulse.x, joint->axisX, deltaImpulse.y, joint->axisZ );
+	vA = b3MulSub( vA, mA, P );
+	vB = b3MulAdd( vB, mB, P );
 
 	if ( stateA->flags & b3_dynamicFlag )
 	{
@@ -205,12 +198,12 @@ static b3HexColor b3LerpColor( b3HexColor a, b3HexColor b, float t )
 	return (b3HexColor)result;
 }
 
-static void b3DrawArrow( b3DebugDraw* draw, b3Pos a, b3Pos b, b3Pos planeNormal, float size,
+static void b3DrawArrow( b3DebugDraw* draw, b3Pos a, b3Pos b, b3Vec3 planeNormal, float size,
 						 b3HexColor color )
 {
 	draw->DrawSegmentFcn( a, b, color, draw->context );
 
-	b3Vec3 shaft = b3Sub( b, a );
+	b3Vec3 shaft = b3SubPos( b, a );
 	float shaftLen = b3Length( shaft );
 	if ( shaftLen < 1e-6f )
 	{
@@ -223,8 +216,8 @@ static void b3DrawArrow( b3DebugDraw* draw, b3Pos a, b3Pos b, b3Pos planeNormal,
 	b3Vec3 perp = b3Normalize( b3Cross( planeNormal, dir ) );
 	b3Vec3 backFromTip = b3MulSV( -headLen, dir );
 	b3Vec3 sideStep = b3MulSV( headLen * 0.5f, perp );
-	b3Vec3 tip1 = b3Add( b, b3Add( backFromTip, sideStep ) );
-	b3Vec3 tip2 = b3Add( b, b3Sub( backFromTip, sideStep ) );
+	b3Pos tip1 = b3OffsetPos( b, b3Add( backFromTip, sideStep ) );
+	b3Pos tip2 = b3OffsetPos( b, b3Sub( backFromTip, sideStep ) );
 	draw->DrawSegmentFcn( b, tip1, color, draw->context );
 	draw->DrawSegmentFcn( b, tip2, color, draw->context );
 }
@@ -249,15 +242,19 @@ void b3DrawMoverJoint( b3DebugDraw* draw, b3World* world, b3JointSim* base,
 	b3Vec3 vA = stateA != NULL ? stateA->linearVelocity : b3Vec3_zero;
 	b3Vec3 vB = stateB != NULL ? stateB->linearVelocity : b3Vec3_zero;
 
-	b3Vec3 error = b3Sub( b3Sub( vB, vA ), joint->linearVelocity );
-	b3Vec2 planeError = { b3Dot( error, axisX ), b3Dot( error, axisZ ) };
-	b3Vec2 planeTarget = { b3Dot( joint->linearVelocity, axisX ),
+	b3Vec3 relativeVelocity = b3Sub( b3Sub( vB, vA ), joint->linearVelocity );
+	b3Vec2 planarVelocity = { b3Dot( relativeVelocity, axisX ), b3Dot( relativeVelocity, axisZ ) };
+	b3Vec2 targetVelocity = { b3Dot( joint->linearVelocity, axisX ),
 						   b3Dot( joint->linearVelocity, axisZ ) };
 
 	// Colorize ring by ratio of actual speed to target speed.
-	float referenceSpeed = b3MaxFloat( b3Length2( planeTarget ), 1.0f );
-	float t = b3ClampFloat( b3Length2( planeError ) / referenceSpeed, 0.0f, 1.0f );
-	b3HexColor color = b3LerpColor( b3_colorWhite, b3_colorBlue, t );
+	b3HexColor color = b3_colorWhite;
+	float targetSpeed = b3Length2( targetVelocity );
+	if (targetSpeed > 0.0f)
+	{
+		float t = b3ClampFloat( b3Length2( planarVelocity ) / targetSpeed, 0.0f, 1.0f );
+		color = b3LerpColor( b3_colorWhite, b3_colorBlue, t );
+	}
 
 	float radius = draw->jointScale;
 	b3Vec3 rx = b3MulSV( radius, axisX );

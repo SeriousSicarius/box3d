@@ -70,6 +70,7 @@ DynamicMover::DynamicMover()
 	m_worldId = b3_nullWorldId;
 	m_groundId = b3_nullBodyId;
 	m_moverId = b3_nullBodyId;
+	m_surfaceBodyId = b3_nullBodyId;
 	m_moverJointId = b3_nullJointId;
 	m_pogoJointId = b3_nullJointId;
 
@@ -151,6 +152,7 @@ void DynamicMover::Create( b3WorldId worldId, const DynamicMoverDef* def )
 	// them.
 	shapeDef.baseMaterial.friction = 0.0f;
 	shapeDef.baseMaterial.restitution = 0.0f;
+	shapeDef.baseMaterial.customColor = b3_colorDodgerBlue;
 	shapeDef.filter = def->filter;
 	shapeDef.enablePreSolveEvents = def->enablePreSolveEvents;
 	shapeDef.enableSensorEvents = def->enableSensorEvents;
@@ -462,41 +464,93 @@ void DynamicMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec2 
 	if ( m_castResult.hit == true )
 	{
 		float moverMass = b3Body_GetMass( m_moverId );
-		float moverWeight =
-			m_gravityScale * b3Length( b3World_GetGravity( m_worldId ) ) * moverMass;
+		float gravity = b3Length( b3World_GetGravity( m_worldId ) );
+		float moverWeight = m_gravityScale * gravity * moverMass;
 
-		b3PogoJointDef pogoDef = b3DefaultPogoJointDef();
-		pogoDef.base.localFrameA.p =
-			b3Body_GetLocalPoint( m_castResult.bodyId, m_castResult.point );
-		pogoDef.base.localFrameB.p = m_capsule.center1 + pogoOffset;
-		pogoDef.normal = m_castResult.normal;
-		pogoDef.base.bodyIdA = m_castResult.bodyId;
-		pogoDef.base.bodyIdB = m_moverId;
-		pogoDef.base.collideConnected = true;
-		pogoDef.restLength = m_pogoRestLength;
-		pogoDef.hertz = m_pogoHertz;
-		pogoDef.dampingRatio = m_pogoDampingRatio;
-		pogoDef.maxCompressionForce = m_pogoCompressionScale * moverWeight;
+		bool pogoJointValid = b3Joint_IsValid( m_pogoJointId );
 
-		// Warm start from the joint that was just destroyed
-		pogoDef.impulse = m_pogoImpulse;
-		pogoDef.velocity = m_pogoVelocity;
-
-		if ( m_jumping )
+		// Create or recreate the pogo joint as needed.
+		if ( B3_ID_EQUALS( m_castResult.bodyId, m_surfaceBodyId ) == false ||
+			 pogoJointValid == false )
 		{
-			// Don't allow the pogo to pull down
-			pogoDef.maxTensionForce = 0.0f;
+			if ( pogoJointValid )
+			{
+				m_pogoLength = b3PogoJoint_GetCurrentLength( m_pogoJointId );
+				m_pogoImpulse = b3PogoJoint_GetImpulse( m_pogoJointId );
+				m_pogoVelocity = b3PogoJoint_GetCurrentSpeed( m_pogoJointId );
+
+				b3DestroyJoint( m_pogoJointId, false );
+				m_pogoJointId = b3_nullJointId;
+			}
+
+			m_surfaceBodyId = m_castResult.bodyId;
+
+			b3PogoJointDef pogoDef = b3DefaultPogoJointDef();
+			pogoDef.base.localFrameA.p =
+				b3Body_GetLocalPoint( m_surfaceBodyId, m_castResult.point );
+			pogoDef.base.localFrameB.p = m_capsule.center1 + pogoOffset;
+			pogoDef.normal = m_castResult.normal;
+			pogoDef.base.bodyIdA = m_surfaceBodyId;
+			pogoDef.base.bodyIdB = m_moverId;
+			pogoDef.base.collideConnected = true;
+			pogoDef.restLength = m_pogoRestLength;
+			pogoDef.hertz = m_pogoHertz;
+			pogoDef.dampingRatio = m_pogoDampingRatio;
+			pogoDef.maxCompressionForce = m_pogoCompressionScale * moverWeight;
+
+			// Warm start from the joint that was just destroyed
+			pogoDef.impulse = m_pogoImpulse;
+			pogoDef.velocity = m_pogoVelocity;
+
+			if ( m_jumping )
+			{
+				// Don't allow the pogo to pull down
+				pogoDef.maxTensionForce = 0.0f;
+			}
+			else
+			{
+				// The pogo can pull down at a multiple of the gravity force.
+				pogoDef.maxTensionForce = m_pogoTensionScale * moverWeight;
+			}
+
+			m_pogoJointId = b3CreatePogoJoint( m_worldId, &pogoDef );
 		}
 		else
 		{
-			// The pogo can pull down at a multiple of the gravity force.
-			pogoDef.maxTensionForce = m_pogoTensionScale * moverWeight;
-		}
+			// Preserve the joint, improving performance.
 
-		m_pogoJointId = b3CreatePogoJoint( m_worldId, &pogoDef );
+			b3Transform localFrameA;
+			localFrameA.p = b3Body_GetLocalPoint( m_surfaceBodyId, m_castResult.point );
+			localFrameA.q = b3Quat_identity;
+			b3Joint_SetLocalFrameA( m_pogoJointId, localFrameA );
+
+			if ( m_jumping )
+			{
+				// Don't allow the pogo to pull down
+				b3PogoJoint_SetMaxTensionForce( m_pogoJointId, 0.0f );
+			}
+			else
+			{
+				// The pogo can pull down at a multiple of the gravity force.
+				b3PogoJoint_SetMaxTensionForce( m_pogoJointId, m_pogoTensionScale * moverWeight );
+			}
+
+			b3PogoJoint_SetMaxCompressionForce( m_pogoJointId,
+												m_pogoCompressionScale * moverWeight );
+
+			b3PogoJoint_SetSpringHertz( m_pogoJointId, m_pogoHertz );
+			b3PogoJoint_SetSpringDampingRatio( m_pogoJointId, m_pogoHertz );
+		}
 	}
 	else
 	{
+		if ( b3Joint_IsValid( m_pogoJointId ) )
+		{
+			b3DestroyJoint( m_pogoJointId, false );
+			m_pogoJointId = b3_nullJointId;
+		}
+
+		m_surfaceBodyId = b3_nullBodyId;
 		m_pogoImpulse = 0.0f;
 		m_pogoVelocity = 0.0f;
 	}

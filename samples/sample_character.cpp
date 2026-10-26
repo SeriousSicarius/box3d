@@ -843,9 +843,6 @@ public:
 static int sampleMover =
 	RegisterSample( "Character", "Geometric Mover", GeometricMoverSample::Create );
 
-// A playground for the dynamic mover. Collect every gem to finish a lap. The course has stairs, a
-// rope bridge, an elevator and a shuttle to a high route, a seesaw, crates to shove, a sweeper arm
-// to jump over, and a row of thin pillars that only the skirt probes can stand on.
 class DynamicMoverSample : public Sample
 {
 public:
@@ -875,7 +872,7 @@ public:
 			b3BodyDef bodyDef = b3DefaultBodyDef();
 			b3BodyId stairsId = b3CreateBody( m_worldId, &bodyDef );
 			b3ShapeDef shapeDef = b3DefaultShapeDef();
-			shapeDef.baseMaterial.customColor = b3_colorCornflowerBlue;
+			shapeDef.baseMaterial.customColor = b3_colorOliveDrab;
 
 			for ( int i = 0; i < 10; ++i )
 			{

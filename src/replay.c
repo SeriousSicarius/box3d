@@ -1740,6 +1740,18 @@ static void b3RecDispatch_PogoJointSetSpringDampingRatio(
 	b3PogoJoint_SetSpringDampingRatio( b3RecMakeJointId( rdr, a->joint ), a->dampingRatio );
 }
 
+static void b3RecDispatch_PogoJointSetMaxTensionForce(
+	const b3RecArgs_PogoJointSetMaxTensionForce* a, b3RecReader* rdr )
+{
+	b3PogoJoint_SetMaxTensionForce( b3RecMakeJointId( rdr, a->joint ), a->force );
+}
+
+static void b3RecDispatch_PogoJointSetMaxCompressionForce(
+	const b3RecArgs_PogoJointSetMaxCompressionForce* a, b3RecReader* rdr )
+{
+	b3PogoJoint_SetMaxCompressionForce( b3RecMakeJointId( rdr, a->joint ), a->force );
+}
+
 static void b3RecDispatch_StateHash( const b3RecArgs_StateHash* a, b3RecReader* rdr )
 {
 	b3World* world = b3GetWorldFromId( rdr->replayWorldId );

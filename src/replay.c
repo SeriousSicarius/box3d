@@ -1752,6 +1752,11 @@ static void b3RecDispatch_PogoJointSetMaxCompressionForce(
 	b3PogoJoint_SetMaxCompressionForce( b3RecMakeJointId( rdr, a->joint ), a->force );
 }
 
+static void b3RecDispatch_PogoJointSetNormal( const b3RecArgs_PogoJointSetNormal* a, b3RecReader* rdr )
+{
+	b3PogoJoint_SetNormal( b3RecMakeJointId( rdr, a->joint ), a->normal );
+}
+
 static void b3RecDispatch_StateHash( const b3RecArgs_StateHash* a, b3RecReader* rdr )
 {
 	b3World* world = b3GetWorldFromId( rdr->replayWorldId );

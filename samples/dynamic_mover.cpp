@@ -370,9 +370,16 @@ void DynamicMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec2 
 		baseId = m_castResult.bodyId;
 	}
 
-	if ( B3_ID_EQUALS( b3Joint_GetBodyA( m_moverJointId ), baseId ) == false )
+	// The mover joint can be destroyed if attached to a platform that gets destroyed.
+	bool moverJointValid = b3Joint_IsValid( m_moverJointId );
+
+	if ( moverJointValid == false || B3_ID_EQUALS( b3Joint_GetBodyA( m_moverJointId ), baseId ) == false )
 	{
-		b3DestroyJoint( m_moverJointId, false );
+		if (moverJointValid)
+		{
+			b3DestroyJoint( m_moverJointId, false );
+		}
+
 		CreateMoverJoint( baseId );
 	}
 
@@ -450,17 +457,6 @@ void DynamicMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec2 
 		m_velocity.z += accelSpeed * desiredDirection.z;
 	}
 
-	// The pogo joint is rebuilt every update because it may land on a different body
-	if ( b3Joint_IsValid( m_pogoJointId ) )
-	{
-		m_pogoLength = b3PogoJoint_GetCurrentLength( m_pogoJointId );
-		m_pogoImpulse = b3PogoJoint_GetImpulse( m_pogoJointId );
-		m_pogoVelocity = b3PogoJoint_GetCurrentSpeed( m_pogoJointId );
-
-		b3DestroyJoint( m_pogoJointId, false );
-		m_pogoJointId = b3_nullJointId;
-	}
-
 	if ( m_castResult.hit == true )
 	{
 		float moverMass = b3Body_GetMass( m_moverId );
@@ -523,6 +519,7 @@ void DynamicMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec2 
 			localFrameA.p = b3Body_GetLocalPoint( m_surfaceBodyId, m_castResult.point );
 			localFrameA.q = b3Quat_identity;
 			b3Joint_SetLocalFrameA( m_pogoJointId, localFrameA );
+			b3PogoJoint_SetNormal( m_pogoJointId, m_castResult.normal );
 
 			if ( m_jumping )
 			{
@@ -539,7 +536,7 @@ void DynamicMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec2 
 												m_pogoCompressionScale * moverWeight );
 
 			b3PogoJoint_SetSpringHertz( m_pogoJointId, m_pogoHertz );
-			b3PogoJoint_SetSpringDampingRatio( m_pogoJointId, m_pogoHertz );
+			b3PogoJoint_SetSpringDampingRatio( m_pogoJointId, m_pogoDampingRatio );
 		}
 	}
 	else

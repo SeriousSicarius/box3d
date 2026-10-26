@@ -372,6 +372,20 @@ static int TestPogoJoint( void )
 	b3PogoJoint_SetSpringDampingRatio( jointId, 0.9f );
 	ENSURE( b3PogoJoint_GetSpringDampingRatio( jointId ) == 0.9f );
 
+	float maxTension = 50.0f * 10.0f * mass;
+	b3PogoJoint_SetMaxTensionForce( jointId, maxTension );
+	ENSURE( b3PogoJoint_GetMaxTensionForce( jointId ) == maxTension );
+
+	float maxCompression = 60.0f * 10.0f * mass;
+	b3PogoJoint_SetMaxCompressionForce( jointId, maxCompression );
+	ENSURE( b3PogoJoint_GetMaxCompressionForce( jointId ) == maxCompression );
+
+	b3Vec3 normal = b3Normalize( (b3Vec3){ 0.2f, 1.0f, 0.0f } );
+	b3PogoJoint_SetNormal( jointId, normal );
+	b3Vec3 gotNormal = b3PogoJoint_GetNormal( jointId );
+	ENSURE( gotNormal.x == normal.x && gotNormal.y == normal.y && gotNormal.z == normal.z );
+	b3PogoJoint_SetNormal( jointId, b3Vec3_axisY );
+
 	// Starts stretched by one meter
 	ENSURE_SMALL( b3PogoJoint_GetCurrentLength( jointId ) - 3.0f, 1.0e-5f );
 

@@ -90,6 +90,21 @@ float b3PogoJoint_GetMaxCompressionForce(b3JointId jointId)
 	return joint->pogoJoint.maxCompressionForce;
 }
 
+void b3PogoJoint_SetNormal( b3JointId jointId, b3Vec3 normal )
+{
+	B3_ASSERT( b3IsValidVec3( normal ) && b3IsNormalized( normal ) );
+	b3World* world = b3GetWorld( jointId.world0 );
+	B3_REC( world, PogoJointSetNormal, jointId, normal );
+	b3JointSim* joint = b3GetJointSimCheckType( jointId, b3_pogoJoint );
+	joint->pogoJoint.normal = normal;
+}
+
+b3Vec3 b3PogoJoint_GetNormal( b3JointId jointId )
+{
+	b3JointSim* joint = b3GetJointSimCheckType( jointId, b3_pogoJoint );
+	return joint->pogoJoint.normal;
+}
+
 float b3PogoJoint_GetCurrentLength( b3JointId jointId )
 {
 	b3World* world = b3GetWorld( jointId.world0 );
@@ -245,6 +260,7 @@ void b3SolvePogoJoint( b3JointSim* base, b3StepContext* context, bool useBias )
 	if ( joint->hertz == 0.0f )
 	{
 		joint->impulse = 0.0f;
+		joint->velocity = 0.0f;
 		return;
 	}
 

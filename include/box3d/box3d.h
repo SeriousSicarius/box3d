@@ -1482,6 +1482,12 @@ B3_API void b3PogoJoint_SetMaxCompressionForce( b3JointId jointId, float force )
 /// Get the max compression force, usually in Newtons.
 B3_API float b3PogoJoint_GetMaxCompressionForce( b3JointId jointId );
 
+// Set the unit ground normal.
+B3_API void b3PogoJoint_SetNormal( b3JointId jointId, b3Vec3 normal );
+
+// Get the unit ground normal.
+B3_API b3Vec3 b3PogoJoint_GetNormal( b3JointId jointId );
+
 /// Get the current length of the pogo.
 B3_API float b3PogoJoint_GetCurrentLength( b3JointId jointId );
 

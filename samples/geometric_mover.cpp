@@ -279,11 +279,11 @@ void GeometricMover::Update( float timeStep, b3Vec3 forward, b3Vec3 right, b3Vec
 
 	// Want the mover to collide with allies
 	b3QueryFilter moverFilter = {
-		.categoryBits = 1, .maskBits = ~0u, .id = 1, .name = "mover_collide" };
+		.categoryBits = 1, .maskBits = ~0ull, .id = 1, .name = "mover_collide" };
 
 	// The cast should ignore allies
 	b3QueryFilter castFilter = {
-		.categoryBits = 1, .maskBits = ~2u, .id = 1, .name = "mover_cast" };
+		.categoryBits = 1, .maskBits = ~2ull, .id = 1, .name = "mover_cast" };
 
 	m_totalIterations = 0;
 	float tolerance = 0.01f;

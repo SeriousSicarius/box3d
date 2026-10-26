@@ -1630,6 +1630,9 @@ static int AllOps( void )
 	b3PogoJoint_SetRestLength( pogoJointId, 0.9f );
 	b3PogoJoint_SetSpringHertz( pogoJointId, 4.0f );
 	b3PogoJoint_SetSpringDampingRatio( pogoJointId, 0.7f );
+	b3PogoJoint_SetNormal( pogoJointId, b3Normalize( (b3Vec3){ 0.2f, 1.0f, 0.0f } ) );
+	b3PogoJoint_SetMaxTensionForce( pogoJointId, 800.0f );
+	b3PogoJoint_SetMaxCompressionForce( pogoJointId, 900.0f );
 
 	// World config mutators
 	b3World_SetGravity( worldId, (b3Vec3){ 0.0f, -9.8f, 0.0f } );

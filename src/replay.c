@@ -609,6 +609,7 @@ b3SphericalJointDef b3RecR_SPHERICALJOINTDEF( b3RecReader* rdr )
 	def.targetAngularVelocity = b3RecR_VEC3( rdr );
 	def.enableConeLimit = b3RecR_BOOL( rdr );
 	def.coneAngle = b3RecR_F32( rdr );
+	def.coneAngleY = b3RecR_F32( rdr );
 	def.enableTwistLimit = b3RecR_BOOL( rdr );
 	def.lowerTwistAngle = b3RecR_F32( rdr );
 	def.upperTwistAngle = b3RecR_F32( rdr );
@@ -1691,6 +1692,11 @@ static void b3RecDispatch_SphericalJointSetTargetAngularVelocity( const b3RecArg
 																 b3RecReader* rdr )
 {
 	b3SphericalJoint_SetTargetAngularVelocity( b3RecMakeJointId( rdr, a->joint ), a->angularVelocity );
+}
+
+static void b3RecDispatch_SphericalJointSetConeLimitY( const b3RecArgs_SphericalJointSetConeLimitY* a, b3RecReader* rdr )
+{
+	b3SphericalJoint_SetConeLimitY( b3RecMakeJointId( rdr, a->joint ), a->angleRadians );
 }
 
 static void b3RecDispatch_StateHash( const b3RecArgs_StateHash* a, b3RecReader* rdr )

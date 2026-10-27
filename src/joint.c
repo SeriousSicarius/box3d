@@ -633,6 +633,7 @@ b3JointId b3CreateSphericalJoint( b3WorldId worldId, const b3SphericalJointDef* 
 {
 	B3_CHECK_JOINT_DEF( def );
 	B3_ASSERT( 0.0f <= def->coneAngle && def->coneAngle <= 0.99f * B3_PI );
+	B3_ASSERT( 0.0f <= def->coneAngleY && def->coneAngleY <= 0.5f * B3_PI );
 	B3_ASSERT( b3IsValidQuat( def->targetRotation ) );
 
 	b3World* world = b3GetUnlockedWorldFromId( worldId );
@@ -650,6 +651,7 @@ b3JointId b3CreateSphericalJoint( b3WorldId worldId, const b3SphericalJointDef* 
 	joint->sphericalJoint.dampingRatio = def->dampingRatio;
 	joint->sphericalJoint.targetRotation = def->targetRotation;
 	joint->sphericalJoint.coneAngle = b3ClampFloat( def->coneAngle, 0.0f, 0.5f * B3_PI );
+	joint->sphericalJoint.coneAngleY = b3ClampFloat( def->coneAngleY, 0.0f, 0.5f * B3_PI );
 
 	float lowerAngle = b3MinFloat( def->lowerTwistAngle, def->upperTwistAngle );
 	float upperAngle = b3MaxFloat( def->lowerTwistAngle, def->upperTwistAngle );
@@ -1415,7 +1417,8 @@ float b3Joint_GetAngularSeparation( b3JointId jointId )
 			if ( sphericalJoint->enableConeLimit )
 			{
 				float swingAngle = b3GetSwingAngle( relQ );
-				sum += b3MaxFloat( 0.0f, swingAngle - sphericalJoint->coneAngle );
+				float coneLimit = b3GetSphericalConeLimit( sphericalJoint, b3RotateVector( relQ, b3Vec3_axisZ ) );
+				sum += b3MaxFloat( 0.0f, swingAngle - coneLimit );
 			}
 
 			if ( sphericalJoint->enableTwistLimit )

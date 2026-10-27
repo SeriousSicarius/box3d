@@ -46,6 +46,56 @@ void b3SphericalJoint_SetConeLimit( b3JointId jointId, float angleRadians )
 	base->sphericalJoint.coneAngle = angleRadians;
 }
 
+float b3SphericalJoint_GetConeLimitY( b3JointId jointId )
+{
+	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_sphericalJoint );
+	return base->sphericalJoint.coneAngleY;
+}
+
+void b3SphericalJoint_SetConeLimitY( b3JointId jointId, float angleRadians )
+{
+	B3_ASSERT( b3IsValidFloat( angleRadians ) && 0 <= angleRadians && angleRadians <= 0.5f * B3_PI );
+	b3World* world = b3GetWorld( jointId.world0 );
+	B3_REC( world, SphericalJointSetConeLimitY, jointId, angleRadians );
+	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_sphericalJoint );
+	base->sphericalJoint.coneAngleY = angleRadians;
+}
+
+// The cone limit for a twist axis (frame B's z-axis, in frame A): coneAngle for swings about frame
+// A's x-axis, coneAngleY for swings about its y-axis, and between them the ellipse through both, as
+// Bullet's cone twist limit has it. Round if coneAngleY is zero.
+float b3GetSphericalConeLimit( const b3SphericalJoint* joint, b3Vec3 twistAxisInA )
+{
+	float a = joint->coneAngle;
+	float b = joint->coneAngleY;
+	if ( b <= 0.0f || a == b )
+	{
+		return a;
+	}
+
+	// The swing axis: z cross the twist axis
+	float x = -twistAxisInA.y;
+	float y = twistAxisInA.x;
+	float lengthSquared = x * x + y * y;
+	if ( lengthSquared < FLT_EPSILON )
+	{
+		return b3MinFloat( a, b );
+	}
+
+	float bx = b * x;
+	float ay = a * y;
+	return a * b * sqrtf( lengthSquared / ( bx * bx + ay * ay ) );
+}
+
+// A point on the cone limit's rim, at radius from the joint, towards phi about frame A's z-axis.
+static b3Vec3 b3GetConeRimPoint( const b3SphericalJoint* joint, float radius, float phi )
+{
+	b3Vec3 direction = { b3Cos( phi ), b3Sin( phi ), 0.0f };
+	float angle = b3GetSphericalConeLimit( joint, direction );
+	float rim = radius * b3Sin( angle );
+	return (b3Vec3){ rim * direction.x, rim * direction.y, radius * b3Cos( angle ) };
+}
+
 float b3SphericalJoint_GetConeAngle( b3JointId jointId )
 {
 	b3World* world = b3GetWorld( jointId.world0 );
@@ -663,7 +713,9 @@ void b3SolveSphericalJoint( b3JointSim* base, b3StepContext* context, bool useBi
 
 			b3Vec3 swingAxis = joint->swingAxis;
 
-			float c = joint->coneAngle - swingAngle;
+			// An elliptical cone's limit follows the twist axis as it swings round within the step.
+			float coneLimit = b3GetSphericalConeLimit( joint, b3RotateVector( relQ, b3Vec3_axisZ ) );
+			float c = coneLimit - swingAngle;
 			float bias = 0.0f;
 			float massScale = 1.0f;
 			float impulseScale = 0.0f;
@@ -809,16 +861,14 @@ void b3DrawSphericalJoint( b3DebugDraw* draw, b3JointSim* base, b3WorldTransform
 	if ( joint->enableConeLimit )
 	{
 		const float radius = 0.1f * scale;
-		float coneRadius = radius * b3Sin( joint->coneAngle );
-		float coneHeight = radius * b3Cos( joint->coneAngle );
 
 		for ( int index = 0; index < kSliceCount; ++index )
 		{
 			float phi1 = 2.0f * ( index + 0 ) / kSliceCount * B3_PI;
 			float phi2 = 2.0f * ( index + 1 ) / kSliceCount * B3_PI;
 
-			b3Vec3 vertex1 = { coneRadius * b3Cos( phi1 ), coneRadius * b3Sin( phi1 ), coneHeight };
-			b3Vec3 vertex2 = { coneRadius * b3Cos( phi2 ), coneRadius * b3Sin( phi2 ), coneHeight };
+			b3Vec3 vertex1 = b3GetConeRimPoint( joint, radius, phi1 );
+			b3Vec3 vertex2 = b3GetConeRimPoint( joint, radius, phi2 );
 
 			draw->DrawSegmentFcn( frameA.p, b3TransformWorldPoint( frameA, vertex1 ), b3_colorCyan, draw->context );
 			draw->DrawSegmentFcn( b3TransformWorldPoint( frameA, vertex1 ), b3TransformWorldPoint( frameA, vertex2 ), b3_colorCyan,

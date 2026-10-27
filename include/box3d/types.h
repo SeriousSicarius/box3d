@@ -937,6 +937,12 @@ typedef struct b3SphericalJointDef
 	/// The angle for the cone limit in radians. Valid range is [0, pi]
 	float coneAngle;
 
+	/// The cone limit's angle for swings about frame A's y-axis, in radians, which makes the cone
+	/// elliptical: coneAngle then limits swings about frame A's x-axis (tilting the twist axis towards
+	/// its y-axis) and this one swings about its y-axis, and between them the limit follows the
+	/// ellipse through both. Zero, the default, keeps the cone round. Valid range is [0, pi/2].
+	float coneAngleY;
+
 	/// A flag to enable the twist limit. The twist is centered on the frameB z-axis.
 	bool enableTwistLimit;
 

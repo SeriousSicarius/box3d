@@ -225,6 +225,7 @@ typedef struct b3SphericalJoint
 	float lowerTwistAngle;
 	float upperTwistAngle;
 	float coneAngle;
+	float coneAngleY;
 	b3Quat targetRotation;
 	float maxSpringTorque;
 	b3Vec3 targetAngularVelocity;
@@ -397,6 +398,7 @@ void b3PrepareParallelJoint( b3JointSim* base, b3StepContext* context );
 void b3PreparePrismaticJoint( b3JointSim* base, b3StepContext* context );
 void b3PrepareRevoluteJoint( b3JointSim* base, b3StepContext* context );
 void b3PrepareSphericalJoint( b3JointSim* base, b3StepContext* context );
+float b3GetSphericalConeLimit( const b3SphericalJoint* joint, b3Vec3 twistAxisInA );
 void b3PrepareWeldJoint( b3JointSim* base, b3StepContext* context );
 void b3PrepareWheelJoint( b3JointSim* base, b3StepContext* context );
 

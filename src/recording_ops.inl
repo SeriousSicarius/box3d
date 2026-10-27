@@ -219,6 +219,9 @@ B3_REC_OP( 0x82, RevoluteJointSetTargetSpeed, RET_NONE, ARG( JOINTID, joint ) AR
 B3_REC_OP( 0x83, SphericalJointSetMaxSpringTorque, RET_NONE, ARG( JOINTID, joint ) ARG( F32, torque ) )
 B3_REC_OP( 0x84, SphericalJointSetTargetAngularVelocity, RET_NONE, ARG( JOINTID, joint ) ARG( VEC3, angularVelocity ) )
 
+// Spherical joint elliptical cones.
+B3_REC_OP( 0x85, SphericalJointSetConeLimitY, RET_NONE, ARG( JOINTID, joint ) ARG( F32, angleRadians ) )
+
 // Spatial queries. Inputs flow through the manifest (reader side). The hit tail and result are
 // hand-written in recording.c / recording_replay.c since they are variable length.
 B3_REC_OP( 0xE8, QueryOverlapAABB, RET_NONE, ARG( WORLDID, world ) ARG( AABB, aabb ) ARG( QUERYFILTER, filter ) )

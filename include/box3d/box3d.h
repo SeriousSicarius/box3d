@@ -1574,6 +1574,14 @@ B3_API float b3SphericalJoint_GetConeLimit( b3JointId jointId );
 /// Set the spherical joint limits in radians
 B3_API void b3SphericalJoint_SetConeLimit( b3JointId jointId, float angleRadians );
 
+/// Get the spherical joint cone limit for swings about frame A's y-axis in radians (zero: a round cone).
+/// See b3SphericalJointDef::coneAngleY.
+B3_API float b3SphericalJoint_GetConeLimitY( b3JointId jointId );
+
+/// Set the spherical joint cone limit for swings about frame A's y-axis in radians, making the cone
+/// elliptical (zero: round). See b3SphericalJointDef::coneAngleY.
+B3_API void b3SphericalJoint_SetConeLimitY( b3JointId jointId, float angleRadians );
+
 /// Get the spherical joint current cone angle in radians.
 B3_API float b3SphericalJoint_GetConeAngle( b3JointId jointId );
 

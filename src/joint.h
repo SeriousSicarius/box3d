@@ -195,6 +195,8 @@ typedef struct b3RevoluteJoint
 	// The substeps the spring spent at its torque cap (in its solve or relax pass), this step.
 	int springCappedSubSteps;
 	bool springCapped;
+	// The world step the joint was last solved in: its spring's sums are that step's.
+	uint64_t springStep;
 
 	int indexA;
 	int indexB;
@@ -239,6 +241,8 @@ typedef struct b3SphericalJoint
 	// The substeps the spring spent at its torque cap (in its solve or relax pass), this step.
 	int springCappedSubSteps;
 	bool springCapped;
+	// The world step the joint was last solved in: its spring's sums are that step's.
+	uint64_t springStep;
 
 	int indexA;
 	int indexB;

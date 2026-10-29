@@ -280,12 +280,22 @@ b3Vec3 b3SphericalJoint_GetSpringTorque( b3JointId jointId )
 {
 	b3World* world = b3GetWorld( jointId.world0 );
 	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_sphericalJoint );
+	// A joint the last step didn't solve (asleep or disabled) put no torque on.
+	if ( base->sphericalJoint.springStep != world->stepIndex )
+	{
+		return b3Vec3_zero;
+	}
 	return b3MulSV( world->inv_dt, base->sphericalJoint.springImpulseSum );
 }
 
 int b3SphericalJoint_GetSpringCappedSubSteps( b3JointId jointId )
 {
+	b3World* world = b3GetWorld( jointId.world0 );
 	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_sphericalJoint );
+	if ( base->sphericalJoint.springStep != world->stepIndex )
+	{
+		return 0;
+	}
 	return base->sphericalJoint.springCappedSubSteps;
 }
 
@@ -491,6 +501,7 @@ void b3PrepareSphericalJoint( b3JointSim* base, b3StepContext* context )
 	joint->springSubStep = 0;
 	joint->springCappedSubSteps = 0;
 	joint->springCapped = false;
+	joint->springStep = context->world->stepIndex;
 }
 
 void b3WarmStartSphericalJoint( b3JointSim* base, b3StepContext* context )

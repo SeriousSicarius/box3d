@@ -203,12 +203,22 @@ float b3RevoluteJoint_GetSpringTorque( b3JointId jointId )
 {
 	b3World* world = b3GetWorld( jointId.world0 );
 	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_revoluteJoint );
+	// A joint the last step didn't solve (asleep or disabled) put no torque on.
+	if ( base->revoluteJoint.springStep != world->stepIndex )
+	{
+		return 0.0f;
+	}
 	return world->inv_dt * base->revoluteJoint.springImpulseSum;
 }
 
 int b3RevoluteJoint_GetSpringCappedSubSteps( b3JointId jointId )
 {
+	b3World* world = b3GetWorld( jointId.world0 );
 	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_revoluteJoint );
+	if ( base->revoluteJoint.springStep != world->stepIndex )
+	{
+		return 0;
+	}
 	return base->revoluteJoint.springCappedSubSteps;
 }
 
@@ -388,6 +398,7 @@ void b3PrepareRevoluteJoint( b3JointSim* base, b3StepContext* context )
 	joint->springSubStep = 0;
 	joint->springCappedSubSteps = 0;
 	joint->springCapped = false;
+	joint->springStep = context->world->stepIndex;
 }
 
 void b3WarmStartRevoluteJoint( b3JointSim* base, b3StepContext* context )

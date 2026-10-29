@@ -1499,10 +1499,11 @@ B3_API void b3RevoluteJoint_SetTargetSpeed( b3JointId jointId, float speed );
 B3_API float b3RevoluteJoint_GetTargetSpeed( b3JointId jointId );
 
 /// Get the revolute joint spring torque about the hinge axis, typically in newton-meters: its mean
-/// over the last step, the spring alone.
+/// over the world's last step, the spring alone (zero if the step didn't solve the joint).
 B3_API float b3RevoluteJoint_GetSpringTorque( b3JointId jointId );
 
-/// Get how many of the last step's substeps the revolute joint spring spent at its torque cap.
+/// Get how many of the world's last step's substeps the revolute joint spring spent at its torque cap
+/// (zero if the step didn't solve the joint).
 B3_API int b3RevoluteJoint_GetSpringCappedSubSteps( b3JointId jointId );
 
 /// Set the revolute joint target angle in radians
@@ -1638,10 +1639,11 @@ B3_API void b3SphericalJoint_SetTargetAngularVelocity( b3JointId jointId, b3Vec3
 B3_API b3Vec3 b3SphericalJoint_GetTargetAngularVelocity( b3JointId jointId );
 
 /// Get the spherical joint spring torque on body B in world space, typically in newton-meters: its
-/// mean over the last step, the spring alone.
+/// mean over the world's last step, the spring alone (zero if the step didn't solve the joint).
 B3_API b3Vec3 b3SphericalJoint_GetSpringTorque( b3JointId jointId );
 
-/// Get how many of the last step's substeps the spherical joint spring spent at its torque cap.
+/// Get how many of the world's last step's substeps the spherical joint spring spent at its torque
+/// cap (zero if the step didn't solve the joint).
 B3_API int b3SphericalJoint_GetSpringCappedSubSteps( b3JointId jointId );
 
 /// Set the spherical joint spring target rotation

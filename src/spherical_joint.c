@@ -283,6 +283,12 @@ b3Vec3 b3SphericalJoint_GetSpringTorque( b3JointId jointId )
 	return b3MulSV( world->inv_dt, base->sphericalJoint.springImpulseSum );
 }
 
+int b3SphericalJoint_GetSpringCappedSubSteps( b3JointId jointId )
+{
+	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_sphericalJoint );
+	return base->sphericalJoint.springCappedSubSteps;
+}
+
 void b3SphericalJoint_EnableMotor( b3JointId jointId, bool enableMotor )
 {
 	b3World* world = b3GetWorld( jointId.world0 );
@@ -483,6 +489,8 @@ void b3PrepareSphericalJoint( b3JointSim* base, b3StepContext* context )
 
 	joint->springImpulseSum = b3Vec3_zero;
 	joint->springSubStep = 0;
+	joint->springCappedSubSteps = 0;
+	joint->springCapped = false;
 }
 
 void b3WarmStartSphericalJoint( b3JointSim* base, b3StepContext* context )
@@ -599,6 +607,7 @@ void b3SolveSphericalJoint( b3JointSim* base, b3StepContext* context, bool useBi
 			if ( b3LengthSquared( newImpulse ) > maxImpulse * maxImpulse )
 			{
 				newImpulse = b3MulSV( maxImpulse, b3Normalize( newImpulse ) );
+				joint->springCapped = true;
 			}
 			impulse = b3Sub( newImpulse, oldImpulse );
 			joint->springImpulse = newImpulse;
@@ -610,6 +619,8 @@ void b3SolveSphericalJoint( b3JointSim* base, b3StepContext* context, bool useBi
 			{
 				joint->springImpulseSum = b3Add( joint->springImpulseSum, joint->springImpulse );
 				joint->springSubStep += 1;
+				joint->springCappedSubSteps += joint->springCapped ? 1 : 0;
+				joint->springCapped = false;
 			}
 		}
 

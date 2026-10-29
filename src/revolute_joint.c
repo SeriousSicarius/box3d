@@ -206,6 +206,12 @@ float b3RevoluteJoint_GetSpringTorque( b3JointId jointId )
 	return world->inv_dt * base->revoluteJoint.springImpulseSum;
 }
 
+int b3RevoluteJoint_GetSpringCappedSubSteps( b3JointId jointId )
+{
+	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_revoluteJoint );
+	return base->revoluteJoint.springCappedSubSteps;
+}
+
 void b3RevoluteJoint_EnableMotor( b3JointId jointId, bool enableMotor )
 {
 	b3World* world = b3GetWorld( jointId.world0 );
@@ -380,6 +386,8 @@ void b3PrepareRevoluteJoint( b3JointSim* base, b3StepContext* context )
 
 	joint->springImpulseSum = 0.0f;
 	joint->springSubStep = 0;
+	joint->springCappedSubSteps = 0;
+	joint->springCapped = false;
 }
 
 void b3WarmStartRevoluteJoint( b3JointSim* base, b3StepContext* context )
@@ -495,6 +503,7 @@ void b3SolveRevoluteJoint( b3JointSim* base, b3StepContext* context, bool useBia
 			float oldImpulse = joint->springImpulse;
 			float deltaImpulse = -massScale * joint->axialMass * ( axialCdot - joint->targetSpeed + bias ) - impulseScale * oldImpulse;
 			float maxImpulse = joint->maxSpringTorque * context->h;
+			joint->springCapped = joint->springCapped || b3AbsFloat( oldImpulse + deltaImpulse ) > maxImpulse;
 			joint->springImpulse = b3ClampFloat( oldImpulse + deltaImpulse, -maxImpulse, maxImpulse );
 			deltaImpulse = joint->springImpulse - oldImpulse;
 
@@ -505,6 +514,8 @@ void b3SolveRevoluteJoint( b3JointSim* base, b3StepContext* context, bool useBia
 			{
 				joint->springImpulseSum += joint->springImpulse;
 				joint->springSubStep += 1;
+				joint->springCappedSubSteps += joint->springCapped ? 1 : 0;
+				joint->springCapped = false;
 			}
 		}
 

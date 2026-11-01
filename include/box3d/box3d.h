@@ -687,6 +687,16 @@ B3_API void b3Body_SetAngularDamping( b3BodyId bodyId, float angularDamping );
 /// Get the current angular damping.
 B3_API float b3Body_GetAngularDamping( b3BodyId bodyId );
 
+/// Cap the speed this body's overlaps are pushed out at (meters per second), below the world's
+/// contact speed (b3WorldDef::contactSpeed). FLT_MAX by default: the world's. A contact takes the
+/// lower of its two bodies' caps; a static body has none. Shallow overlaps (resting contact) are
+/// pushed out as before; a deep one, such as a body turned dynamic where it lies in the ground,
+/// leaves slowly.
+B3_API void b3Body_SetContactSpeed( b3BodyId bodyId, float contactSpeed );
+
+/// Get this body's own push out speed cap.
+B3_API float b3Body_GetContactSpeed( b3BodyId bodyId );
+
 /// Adjust the gravity scale. Normally this is set in b3BodyDef before creation.
 /// @see b3BodyDef::gravityScale
 B3_API void b3Body_SetGravityScale( b3BodyId bodyId, float gravityScale );

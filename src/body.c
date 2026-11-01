@@ -261,6 +261,7 @@ b3BodyId b3CreateBody( b3WorldId worldId, const b3BodyDef* def )
 	bodySim->linearDamping = def->linearDamping;
 	bodySim->angularDamping = def->angularDamping;
 	bodySim->gravityScale = def->gravityScale;
+	bodySim->contactSpeed = FLT_MAX;
 	bodySim->bodyId = bodyId;
 	bodySim->flags = lockFlags;
 	bodySim->flags |= def->isBullet ? b3_isBullet : 0;
@@ -2061,6 +2062,31 @@ float b3Body_GetAngularDamping( b3BodyId bodyId )
 	b3Body* body = b3GetBodyFullId( world, bodyId );
 	b3BodySim* bodySim = b3GetBodySim( world, body );
 	return bodySim->angularDamping;
+}
+
+void b3Body_SetContactSpeed( b3BodyId bodyId, float contactSpeed )
+{
+	B3_ASSERT( contactSpeed >= 0.0f );
+
+	b3World* world = b3GetUnlockedWorld( bodyId.world0 );
+	if ( world == NULL )
+	{
+		return;
+	}
+
+	B3_REC( world, BodySetContactSpeed, bodyId, contactSpeed );
+
+	b3Body* body = b3GetBodyFullId( world, bodyId );
+	b3BodySim* bodySim = b3GetBodySim( world, body );
+	bodySim->contactSpeed = contactSpeed;
+}
+
+float b3Body_GetContactSpeed( b3BodyId bodyId )
+{
+	b3World* world = b3GetWorld( bodyId.world0 );
+	b3Body* body = b3GetBodyFullId( world, bodyId );
+	b3BodySim* bodySim = b3GetBodySim( world, body );
+	return bodySim->contactSpeed;
 }
 
 void b3Body_SetGravityScale( b3BodyId bodyId, float gravityScale )

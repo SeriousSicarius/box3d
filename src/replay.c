@@ -918,6 +918,11 @@ static void b3RecDispatch_BodySetAngularDamping( const b3RecArgs_BodySetAngularD
 	b3Body_SetAngularDamping( b3RecMakeBodyId( rdr, a->body ), a->damping );
 }
 
+static void b3RecDispatch_BodySetContactSpeed( const b3RecArgs_BodySetContactSpeed* a, b3RecReader* rdr )
+{
+	b3Body_SetContactSpeed( b3RecMakeBodyId( rdr, a->body ), a->speed );
+}
+
 static void b3RecDispatch_BodySetGravityScale( const b3RecArgs_BodySetGravityScale* a, b3RecReader* rdr )
 {
 	b3Body_SetGravityScale( b3RecMakeBodyId( rdr, a->body ), a->scale );

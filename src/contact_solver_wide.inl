@@ -171,6 +171,8 @@ typedef struct B3_WIDE( b3ContactConstraint )
 	b3FloatW friction;
 	b3FloatW rollingResistance;
 	b3FloatW restitution;
+	// The most speed an overlap is pushed out at, negated: the world's, and each body's own
+	b3FloatW pushLimit;
 
 	int manifoldCount;
 } b3ContactConstraintWide;
@@ -441,7 +443,8 @@ _Static_assert( offsetof( b3Matrix3, cy ) == 12 && offsetof( b3Matrix3, cz ) == 
 
 static const b3Contact b3_zeroContact = { 0 };
 static const b3Manifold b3_zeroManifold = { 0 };
-static const b3BodySim b3_zeroBodySim = { 0 };
+// A static body's or an empty lane's: no mass, and no push out speed cap of its own.
+static const b3BodySim b3_zeroBodySim = { .contactSpeed = FLT_MAX };
 
 #if B3_SIMD_WIDTH == 8
 #define B3_GATHER_LANES( wide, lanes, field )                                                                                    \
@@ -634,6 +637,12 @@ B3_FORCE_INLINE bool b3PrepareConstraintW( b3ContactConstraintWide* c, b3Contact
 	c->invMassB = mB;
 	c->invIA = iA;
 	c->invIB = iB;
+
+	b3FloatW speedA, speedB;
+	B3_GATHER_LANES( speedA, simLanesA, contactSpeed );
+	B3_GATHER_LANES( speedB, simLanesB, contactSpeed );
+	b3FloatW pushLimit = b3MinW( b3MinW( speedA, speedB ), b3SplatW( context->world->contactSpeed ) );
+	c->pushLimit = b3SubW( zeroW, pushLimit );
 
 	b3Vec3W tangentVelocity;
 	B3_GATHER_LANES( c->friction, contactLanes, friction );
@@ -1097,7 +1106,6 @@ B3_FORCE_INLINE void b3PushContactsW( b3SolverBlock block, b3StepContext* contex
 {
 	b3BodyState* states = context->states;
 	b3FloatW inv_h = b3SplatW( context->inv_h );
-	b3FloatW contactSpeed = b3SplatW( -context->world->contactSpeed );
 	b3FloatW oneW = b3SplatW( 1.0f );
 	b3FloatW zeroW = b3ZeroW();
 
@@ -1157,7 +1165,7 @@ B3_FORCE_INLINE void b3PushContactsW( b3SolverBlock block, b3StepContext* contex
 				b3FloatW specBias = b3MulW( s, inv_h );
 
 				// Overlap bias - negative
-				b3FloatW overlapBias = b3MaxW( b3MulW( biasRate, s ), contactSpeed );
+				b3FloatW overlapBias = b3MaxW( b3MulW( biasRate, s ), c->pushLimit );
 				b3FloatW velocityBias = b3BlendW( overlapBias, specBias, separated );
 
 				b3FloatW pointMassScale = b3BlendW( massScale, oneW, separated );

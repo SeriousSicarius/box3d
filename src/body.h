@@ -224,6 +224,9 @@ typedef struct b3BodySim
 	float angularDamping;
 	float gravityScale;
 
+	// The most speed this body's overlaps are pushed out at, below the world's (FLT_MAX: the world's)
+	float contactSpeed;
+
 	// Index of b3Body
 	int bodyId;
 } b3BodySim;

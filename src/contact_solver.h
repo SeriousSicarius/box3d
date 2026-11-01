@@ -45,6 +45,8 @@ typedef struct b3ContactConstraint
 	float invMassA, invMassB;
 	b3Matrix3 invIA, invIB;
 	b3Softness softness;
+	// The most speed the overlap is pushed out at: the world's, and each body's own
+	float pushLimit;
 	b3Matrix3 rollingMass;
 	float friction;
 	float restitution;

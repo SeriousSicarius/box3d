@@ -121,6 +121,18 @@ void b3PrepareContacts_Mesh( b3SolverBlock block, b3StepContext* context )
 				iB = simB->invInertiaWorld;
 			}
 
+			// The most speed the overlap is pushed out at: the world's, and each body's own (a static
+			// body has none).
+			float pushLimit = world->contactSpeed;
+			if ( indexA != B3_NULL_INDEX )
+			{
+				pushLimit = b3MinFloat( pushLimit, bodySims[indexA].contactSpeed );
+			}
+			if ( indexB != B3_NULL_INDEX )
+			{
+				pushLimit = b3MinFloat( pushLimit, bodySims[indexB].contactSpeed );
+			}
+
 			int manifoldCount = contact->manifoldCount;
 			contactConstraint->contact = contact;
 			contactConstraint->manifoldCount = manifoldCount;
@@ -133,6 +145,7 @@ void b3PrepareContacts_Mesh( b3SolverBlock block, b3StepContext* context )
 			contactConstraint->rollingMass = b3InvertMatrix( b3AddMM( iA, iB ) );
 			contactConstraint->softness =
 				( contact->flags & b3_contactStaticFlag ) != 0 ? context->staticSoftness : context->contactSoftness;
+			contactConstraint->pushLimit = pushLimit;
 			contactConstraint->friction = contact->friction;
 			contactConstraint->restitution = contact->restitution;
 			contactConstraint->rollingResistance = contact->rollingResistance;
@@ -394,7 +407,6 @@ void b3PushContacts_Mesh( b3SolverBlock block, b3StepContext* context )
 	int endIndex = startIndex + block.count;
 
 	float inv_h = context->inv_h;
-	const float contactSpeed = context->world->contactSpeed;
 
 	for ( int i = startIndex; i < endIndex; ++i )
 	{
@@ -455,7 +467,7 @@ void b3PushContacts_Mesh( b3SolverBlock block, b3StepContext* context )
 				else
 				{
 					// overlap bias is negative
-					velocityBias = b3MaxFloat( softness.massScale * softness.biasRate * s, -contactSpeed );
+					velocityBias = b3MaxFloat( softness.massScale * softness.biasRate * s, -contactConstraint->pushLimit );
 					massScale = softness.massScale;
 					impulseScale = softness.impulseScale;
 				}
